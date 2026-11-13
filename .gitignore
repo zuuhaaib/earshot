@@ -30,12 +30,17 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
+# local env files (.env.example is the committed template)
+.env
 .env*.local
 
 # typescript
 *.tsbuildinfo
 
+/backend/config.ts
+
 # generated native folders
 /ios
 /android
+
+/.claude/
