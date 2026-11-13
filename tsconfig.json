@@ -13,6 +13,10 @@
       "node"
     ]
   },
+  "exclude": [
+    "node_modules",
+    "supabase/functions"
+  ],
   "include": [
     "**/*.ts",
     "**/*.tsx",

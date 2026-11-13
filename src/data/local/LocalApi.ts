@@ -28,6 +28,8 @@ import type {
   NewAccount,
   Person,
   ProfileEdit,
+  ReportContext,
+  ReportReason,
   Room,
   RoomView,
   SendOutcome,
@@ -619,8 +621,9 @@ export class LocalApi implements EarshotApi, SimHost {
     );
 
     const links = await this.links(me);
+    const hidden = await this.blockedIds(me);
     const minutes = (t: number) => Math.max(0, Math.round((now - t) / 60_000));
-    const sightings = rows.map((r): Sighting & { at: number } => {
+    const sightings = rows.filter((r) => !hidden.has(r.id)).map((r): Sighting & { at: number } => {
       const status = r.kind === 'share' ? 'shared' : r.ended_at === null ? 'playing' : 'played';
       const at = status === 'played' ? r.ended_at! : r.started_at;
       return {
@@ -728,6 +731,7 @@ export class LocalApi implements EarshotApi, SimHost {
     const me = await this.meId();
     if (toId === me) throw new SendError('self');
     if (!(await this.getPerson(toId))) throw new SendError('unknown-person');
+    if ((await this.blockedIds(me)).has(toId)) throw new SendError('unknown-person');
     const link = (await this.links(me)).get(toId) ?? { kind: 'none' };
     if (link.kind === 'sent') throw new SendError('already-sent');
     if (link.kind === 'incoming') throw new SendError('they-sent-first');
@@ -799,10 +803,13 @@ export class LocalApi implements EarshotApi, SimHost {
       const read = (
         await this.db.all<{ read_at: number }>('SELECT read_at FROM chat_reads WHERE request_id = ? AND user_id = ?', [r.id, me])
       )[0];
+      const hiddenAt = await this.hiddenAt(r.id, me);
+      // a chat you deleted stays gone until something new is said in it
+      if (hiddenAt && (last?.created_at ?? 0) <= hiddenAt) continue;
       const fresh = (
         await this.db.all<{ n: number }>(
           'SELECT COUNT(*) AS n FROM messages WHERE request_id = ? AND from_id != ? AND created_at > ?',
-          [r.id, me, read?.read_at ?? 0],
+          [r.id, me, Math.max(read?.read_at ?? 0, hiddenAt)],
         )
       )[0].n;
       out.push({
@@ -824,19 +831,19 @@ export class LocalApi implements EarshotApi, SimHost {
   async getInbox(): Promise<Inbox> {
     const me = await this.meta('current_user');
     if (!me) return { waiting: [], chats: [], sent: [] };
+    const hidden = await this.blockedIds(me);
     return {
-      waiting: await this.requests("to_id = ? AND status = 'pending' ORDER BY created_at DESC", [me]),
-      chats: await this.chatSummaries(me),
-      sent: await this.requests("from_id = ? AND status != 'accepted' ORDER BY created_at DESC", [me]),
+      waiting: (await this.requests("to_id = ? AND status = 'pending' ORDER BY created_at DESC", [me])).filter((r) => !hidden.has(r.from.id)),
+      chats: (await this.chatSummaries(me)).filter((c) => !hidden.has(c.other.id)),
+      sent: (await this.requests("from_id = ? AND status != 'accepted' ORDER BY created_at DESC", [me])).filter((r) => !hidden.has(r.to.id)),
     };
   }
 
   async getInboxCount(): Promise<number> {
     const me = await this.meta('current_user');
     if (!me) return 0;
-    const waiting = await this.db.all<{ n: number }>("SELECT COUNT(*) AS n FROM requests WHERE to_id = ? AND status = 'pending'", [me]);
-    const chats = await this.chatSummaries(me);
-    return waiting[0].n + chats.filter((c) => c.unread > 0).length;
+    const inbox = await this.getInbox();
+    return inbox.waiting.length + inbox.chats.filter((c) => c.unread > 0).length;
   }
 
   async getLink(personId: string): Promise<Link> {
@@ -852,9 +859,10 @@ export class LocalApi implements EarshotApi, SimHost {
       await this.requests("id = ? AND status = 'accepted' AND (from_id = ? OR to_id = ?)", [Number(chatId), me, me])
     )[0];
     if (!opener) return null;
+    if ((await this.blockedIds(me)).has(opener.from.id === me ? opener.to.id : opener.from.id)) return null;
     const rows = await this.db.all<{ id: number; from_id: string; body: string | null; track_id: string | null; created_at: number }>(
-      'SELECT * FROM messages WHERE request_id = ? ORDER BY created_at ASC, id ASC',
-      [Number(chatId)],
+      'SELECT * FROM messages WHERE request_id = ? AND created_at > ? ORDER BY created_at ASC, id ASC',
+      [Number(chatId), await this.hiddenAt(Number(chatId), me)],
     );
     const messages: ChatMessage[] = [];
     for (const m of rows) {
@@ -886,6 +894,29 @@ export class LocalApi implements EarshotApi, SimHost {
     const text = body.trim();
     if (!text) return;
     await this.say(chatId, await this.meId(), text);
+  }
+
+  /** When this person deleted this chat, or 0 if they haven't. */
+  private async hiddenAt(requestId: number, userId: string): Promise<number> {
+    const rows = await this.db.all<{ hidden_at: number }>('SELECT hidden_at FROM chat_hides WHERE request_id = ? AND user_id = ?', [requestId, userId]);
+    return rows[0]?.hidden_at ?? 0;
+  }
+
+  async deleteChat(chatId: string): Promise<void> {
+    const me = await this.meId();
+    const mine = /^\d+$/.test(chatId)
+      ? (await this.db.all<{ id: number }>("SELECT id FROM requests WHERE id = ? AND status = 'accepted' AND (from_id = ? OR to_id = ?)", [Number(chatId), me, me]))[0]
+      : undefined;
+    if (!mine) throw new Error('not-your-chat');
+    const at = this.now();
+    await this.write(async () => {
+      await this.db.run('INSERT OR REPLACE INTO chat_hides (request_id, user_id, hidden_at) VALUES (?, ?, ?)', [mine.id, me, at]);
+      await this.markRead(chatId, me, at);
+      // once both sides have deleted it, the old messages go for good
+      const hides = await this.db.all<{ hidden_at: number }>('SELECT hidden_at FROM chat_hides WHERE request_id = ?', [mine.id]);
+      if (hides.length === 2) await this.db.run('DELETE FROM messages WHERE request_id = ? AND created_at <= ?', [mine.id, Math.min(...hides.map((h) => h.hidden_at))]);
+    });
+    this.emit('inbox');
   }
 
   async markChatRead(chatId: string): Promise<void> {
@@ -969,7 +1000,8 @@ export class LocalApi implements EarshotApi, SimHost {
       [me, ...inScope, now],
     );
     const links = me ? await this.links(me) : new Map<string, Link>();
-    const posts: CityPost[] = rows.map((r) => ({
+    const hidden = await this.blockedIds(me);
+    const posts: CityPost[] = rows.filter((r) => !hidden.has(r.id)).map((r) => ({
       id: String(r.post_id),
       person: toPerson(r),
       track: toTrack(r),
@@ -1111,7 +1143,15 @@ export class LocalApi implements EarshotApi, SimHost {
             )
           )[0].n;
 
-    return { artist: name, scope, tracks: trackRows.map(toTrack), listeners: fans.map(toPerson), threads, elsewhere };
+    const hidden = await this.blockedIds(await this.meta('current_user'));
+    return {
+      artist: name,
+      scope,
+      tracks: trackRows.map(toTrack),
+      listeners: fans.map(toPerson).filter((p) => !hidden.has(p.id)),
+      threads: threads.filter((t) => !hidden.has(t.starter.id)),
+      elsewhere,
+    };
   }
 
   async getThread(threadId: string): Promise<Thread | null> {
@@ -1121,6 +1161,8 @@ export class LocalApi implements EarshotApi, SimHost {
     if (!t) return null;
     const starter = await this.getPerson(t.user_id);
     if (!starter) return null;
+    const hidden = await this.blockedIds(await this.meta('current_user'));
+    if (hidden.has(starter.id)) return null;
     const rows = await this.db.all<{ id: number; user_id: string; body: string; track_id: string | null; created_at: number }>(
       'SELECT * FROM replies WHERE thread_id = ? AND created_at <= ? ORDER BY created_at ASC, id ASC',
       [t.id, now],
@@ -1128,7 +1170,7 @@ export class LocalApi implements EarshotApi, SimHost {
     const replies: ThreadReply[] = [];
     for (const r of rows) {
       const person = await this.getPerson(r.user_id);
-      if (person) replies.push({ id: String(r.id), person, body: r.body, track: await this.trackById(r.track_id), at: r.created_at });
+      if (person && !hidden.has(person.id)) replies.push({ id: String(r.id), person, body: r.body, track: await this.trackById(r.track_id), at: r.created_at });
     }
     return { id: threadId, artist: t.artist, city: t.city, title: t.title, body: t.body, starter, startedAt: t.created_at, replies };
   }
@@ -1224,6 +1266,7 @@ export class LocalApi implements EarshotApi, SimHost {
     const person = await this.getPerson(personId);
     if (!person) return null;
     const me = await this.meta('current_user');
+    if ((await this.blockedIds(me)).has(personId)) return null;
     let room = await this.loadRoom(personId);
     if (!room) {
       // Everyone gets a room. New accounts start with the house look and empty furniture.
@@ -1311,6 +1354,95 @@ export class LocalApi implements EarshotApi, SimHost {
       await this.storeRoom(room);
     });
     this.emit('room');
+  }
+
+  // ---- safety -------------------------------------------------------------
+
+  private async blockedIds(me: string | null): Promise<Set<string>> {
+    if (!me) return new Set();
+    const rows = await this.db.all<{ blocked_id: string }>('SELECT blocked_id FROM blocks WHERE user_id = ?', [me]);
+    return new Set(rows.map((r) => r.blocked_id));
+  }
+
+  /** Take one person's signature out of guestbooks: one owner's, or (owner null) everyone's. */
+  private async unsign(ownerId: string | null, signerId: string) {
+    const rows = await this.db.all<{ user_id: string }>('SELECT user_id FROM rooms WHERE doc LIKE ?', [`%${signerId}%`]);
+    for (const row of rows) {
+      if (row.user_id === signerId || (ownerId && row.user_id !== ownerId)) continue;
+      const room = await this.loadRoom(row.user_id);
+      if (!room) continue;
+      for (const section of room.sections) {
+        if (section.kind === 'guestbook') section.entries = section.entries.filter((e) => e.fromId !== signerId);
+      }
+      await this.storeRoom(room);
+    }
+  }
+
+  async blockPerson(personId: string): Promise<void> {
+    const me = await this.meId();
+    if (personId === me) throw new Error('self');
+    if (!(await this.getPerson(personId))) throw new Error('unknown-person');
+    await this.write(async () => {
+      await this.db.run('INSERT OR IGNORE INTO blocks (user_id, blocked_id, created_at) VALUES (?, ?, ?)', [me, personId, this.now()]);
+      await this.unsign(me, personId);
+      await this.unsign(personId, me);
+    });
+    this.emit('session', 'nearby', 'crate', 'inbox', 'room', 'city', 'artist');
+  }
+
+  async unblockPerson(personId: string): Promise<void> {
+    const me = await this.meId();
+    await this.write(() => this.db.run('DELETE FROM blocks WHERE user_id = ? AND blocked_id = ?', [me, personId]));
+    this.emit('session', 'nearby', 'crate', 'inbox', 'room', 'city', 'artist');
+  }
+
+  async getBlocked(): Promise<Person[]> {
+    const me = await this.meta('current_user');
+    if (!me) return [];
+    const rows = await this.db.all<UserRow>(
+      'SELECT u.* FROM blocks b JOIN users u ON u.id = b.blocked_id WHERE b.user_id = ? ORDER BY b.created_at DESC',
+      [me],
+    );
+    return rows.map(toPerson);
+  }
+
+  /** With no server there is nobody to send a report to. It is kept on this phone and goes nowhere. */
+  async reportPerson(personId: string, reason: ReportReason, note: string, context: ReportContext): Promise<void> {
+    const me = await this.meId();
+    if (!(await this.getPerson(personId))) throw new Error('unknown-person');
+    await this.write(() =>
+      this.db.run('INSERT INTO reports (reporter_id, about_id, reason, note, context, created_at) VALUES (?, ?, ?, ?, ?, ?)', [
+        me,
+        personId,
+        reason,
+        note.trim().slice(0, 1000),
+        context ? JSON.stringify(context) : null,
+        this.now(),
+      ]),
+    );
+  }
+
+  async deleteAccount(): Promise<void> {
+    const me = await this.meId();
+    await this.write(async () => {
+      const row = (await this.db.all<UserRow>('SELECT * FROM users WHERE id = ?', [me]))[0];
+      if (!row || row.seeded) throw new AuthError('resident');
+      const mine = 'SELECT id FROM requests WHERE from_id = ? OR to_id = ?';
+      await this.db.run('DELETE FROM replies WHERE user_id = ? OR thread_id IN (SELECT id FROM threads WHERE user_id = ?)', [me, me]);
+      await this.db.run('DELETE FROM threads WHERE user_id = ?', [me]);
+      await this.db.run('DELETE FROM posts WHERE user_id = ?', [me]);
+      await this.db.run(`DELETE FROM messages WHERE from_id = ? OR request_id IN (${mine})`, [me, me, me]);
+      await this.db.run(`DELETE FROM chat_reads WHERE user_id = ? OR request_id IN (${mine})`, [me, me, me]);
+      await this.db.run('DELETE FROM requests WHERE from_id = ? OR to_id = ?', [me, me]);
+      for (const table of ['saves', 'plays', 'rooms']) await this.db.run(`DELETE FROM ${table} WHERE user_id = ?`, [me]);
+      await this.db.run('DELETE FROM blocks WHERE user_id = ? OR blocked_id = ?', [me, me]);
+      await this.db.run('DELETE FROM chat_hides WHERE user_id = ?', [me]);
+      await this.db.run('DELETE FROM reports WHERE reporter_id = ?', [me]);
+      await this.unsign(null, me);
+      await this.db.run('DELETE FROM users WHERE id = ?', [me]);
+      await this.setMeta('current_user', null);
+    });
+    this.emit('session', 'nearby', 'crate', 'inbox', 'room', 'city', 'artist');
   }
 
   async updateProfile(edit: ProfileEdit): Promise<void> {

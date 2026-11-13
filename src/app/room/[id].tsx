@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { ScrollView, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -142,6 +142,18 @@ export default function RoomScreen() {
                     else router.navigate('/inbox');
                   }}
                 />
+              )}
+              {mine ? null : (
+                <Pressable
+                  onPress={() => router.push({ pathname: '/safety/[id]', params: { id: who.id, kind: 'room' } })}
+                  accessibilityRole="link"
+                  hitSlop={10}
+                  style={{ alignSelf: 'center', marginTop: 14 }}
+                >
+                  <Txt variant="small" tone="soft" style={{ textDecorationLine: 'underline' }}>
+                    block or report {who.name.split(' ')[0]}
+                  </Txt>
+                </Pressable>
               )}
             </View>
 

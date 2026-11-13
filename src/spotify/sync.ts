@@ -38,6 +38,8 @@ const subscribe = (l: () => void) => {
   return () => listeners.delete(l);
 };
 export const useSpotify = () => useSyncExternalStore(subscribe, () => state, () => state);
+/** The Spotify link's state right now, for code that isn't a component (the Last.fm stand-in checks it). */
+export const spotifyNow = () => state;
 
 const WORDS: Record<SpotifyError['code'], string> = {
   'not-configured': 'Spotify isn’t set up in this build yet: the Client ID is missing.',

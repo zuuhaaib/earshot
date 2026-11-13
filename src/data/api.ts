@@ -22,6 +22,8 @@ import type {
   Session,
   Sighting,
   Thread,
+  ReportContext,
+  ReportReason,
 } from './types';
 
 /** What changed, so screens showing it can reload. */
@@ -116,6 +118,12 @@ export interface EarshotApi {
   getChat(chatId: string): Promise<Chat | null>;
   sendMessage(chatId: string, body: string): Promise<void>;
   markChatRead(chatId: string): Promise<void>;
+  /**
+   * Delete a chat for you only. It empties and leaves your inbox; the other
+   * person keeps their copy and isn't told. If either of you writes again it
+   * comes back with only the new messages.
+   */
+  deleteChat(chatId: string): Promise<void>;
 
   // ---- city -------------------------------------------------------------
   /**
@@ -160,6 +168,23 @@ export interface EarshotApi {
   saveRoom(room: Room, tracks?: Track[]): Promise<void>;
   /** Leave a track in someone's guestbook, with why. Signing again replaces your entry. */
   signGuestbook(personId: string, track: Track, why: string): Promise<void>;
+
+  // ---- safety -----------------------------------------------------------
+  /**
+   * Block someone. Neither of you sees the other anywhere afterwards, their
+   * songs and chat leave your inbox, and they are never told.
+   */
+  blockPerson(personId: string): Promise<void>;
+  unblockPerson(personId: string): Promise<void>;
+  /** The people you've blocked, newest first. */
+  getBlocked(): Promise<Person[]>;
+  /**
+   * Report someone to whoever runs earshot. Rejects with an Error whose
+   * message is 'too-many-reports' past the daily limit.
+   */
+  reportPerson(personId: string, reason: ReportReason, note: string, context: ReportContext): Promise<void>;
+  /** Delete your account and everything of yours, for good, and sign out. */
+  deleteAccount(): Promise<void>;
 
   // ---- housekeeping -----------------------------------------------------
   /** Wipe this device back to a fresh install. */

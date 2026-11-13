@@ -110,8 +110,8 @@ export function SpotifyCard({ userId }: { userId: string }) {
         <View style={{ marginTop: 14 }}>
           <Txt variant="titleSm">One thing to fill in first</Txt>
           <Txt variant="small" tone="soft" style={{ marginTop: 4 }}>
-            This build doesn’t have a Spotify Client ID yet. Paste yours into src/spotify/config.ts (the line that says
-            SPOTIFY_CLIENT_ID), save, and this button wakes up.
+            This build doesn’t have a Spotify Client ID yet. Put yours in the .env file as EXPO_PUBLIC_SPOTIFY_CLIENT_ID, restart
+            Expo, and this button wakes up.
           </Txt>
         </View>
       ) : on ? (

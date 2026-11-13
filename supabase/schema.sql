@@ -135,6 +135,16 @@ create table if not exists app.chat_reads (
   primary key (request_id, user_id)
 );
 
+-- Deleting a chat is one-sided: it empties the conversation for the person who
+-- deleted it and leaves the other person's copy alone. Messages sent after
+-- hidden_at show up again as a fresh conversation.
+create table if not exists app.chat_hides (
+  request_id bigint not null references app.requests (id) on delete cascade,
+  user_id text not null references app.profiles (id) on delete cascade,
+  hidden_at bigint not null,
+  primary key (request_id, user_id)
+);
+
 create table if not exists app.rooms (
   user_id text primary key references app.profiles (id) on delete cascade,
   doc jsonb not null,
@@ -228,7 +238,7 @@ create table if not exists app.reports (
 do $$
 declare t text;
 begin
-  foreach t in array array['profiles','tracks','plays','saves','requests','messages','chat_reads','rooms','posts','threads','replies','presence','tastes','openers','sim_state','blocks','reports']
+  foreach t in array array['profiles','tracks','plays','saves','requests','messages','chat_reads','rooms','posts','threads','replies','presence','tastes','openers','sim_state','blocks','reports','chat_hides']
   loop
     execute format('alter table app.%I enable row level security', t);
   end loop;
@@ -770,13 +780,15 @@ language sql stable set search_path = '' as $$
       case when q.from_id = v then q.to_id else q.from_id end as other_id,
       cr.read_at, lm.created_at as last_at, lm.from_id as last_from,
       coalesce(lm.body, 'Sent a song: ' || coalesce(lt.title, 'untitled')) as last_text,
-      (select count(*)::integer from app.messages m where m.request_id = q.id and m.from_id <> v and m.created_at > coalesce(cr.read_at, 0)) as fresh
+      (select count(*)::integer from app.messages m where m.request_id = q.id and m.from_id <> v and m.created_at > greatest(coalesce(cr.read_at, 0), coalesce(ch.hidden_at, 0))) as fresh
     from app.requests q
     left join app.chat_reads cr on cr.request_id = q.id and cr.user_id = v
+    left join app.chat_hides ch on ch.request_id = q.id and ch.user_id = v
     left join lateral (select m.* from app.messages m where m.request_id = q.id order by m.created_at desc, m.id desc limit 1) lm on true
     left join app.tracks lt on lt.id = lm.track_id
     where q.status = 'accepted' and (q.from_id = v or q.to_id = v)
       and not app.i_blocked(v, case when q.from_id = v then q.to_id else q.from_id end)
+      and (ch.hidden_at is null or coalesce(lm.created_at, 0) > ch.hidden_at)
   ) c
 $$;
 
@@ -814,7 +826,8 @@ begin
     'opener', app.request_json(q),
     'messages', (select coalesce(jsonb_agg(
         jsonb_build_object('id', m.id::text, 'fromId', m.from_id, 'body', m.body, 'track', app.track_by_id(m.track_id), 'sentAt', m.created_at)
-        order by m.created_at, m.id), '[]'::jsonb) from app.messages m where m.request_id = q.id));
+        order by m.created_at, m.id), '[]'::jsonb) from app.messages m where m.request_id = q.id
+          and m.created_at > coalesce((select ch.hidden_at from app.chat_hides ch where ch.request_id = q.id and ch.user_id = v), 0)));
 end $$;
 
 create or replace function public.send_message(p_chat text, p_body text) returns void
@@ -846,6 +859,27 @@ begin
   end if;
   insert into app.chat_reads (request_id, user_id, read_at) values (p_chat::bigint, v, app.now_ms())
     on conflict (request_id, user_id) do update set read_at = excluded.read_at;
+end $$;
+
+-- Delete a chat, for you only. Everything said so far disappears from your
+-- side and the chat leaves your inbox; the other person keeps their copy and is
+-- not told. You stay connected: if either of you writes again, the chat comes
+-- back holding only what's new. Once both people have deleted it, the old
+-- messages are removed from the database for good.
+create or replace function public.delete_chat(p_chat text) returns void
+language plpgsql security definer set search_path = '' as $$
+declare v text := app.need_me(); at bigint := app.now_ms(); rid bigint; seen_by_all bigint;
+begin
+  if p_chat !~ '^[0-9]+$' then raise exception 'not-your-chat'; end if;
+  select id into rid from app.requests where id = p_chat::bigint and status = 'accepted' and (from_id = v or to_id = v);
+  if rid is null then raise exception 'not-your-chat'; end if;
+  insert into app.chat_hides (request_id, user_id, hidden_at) values (rid, v, at)
+    on conflict (request_id, user_id) do update set hidden_at = excluded.hidden_at;
+  insert into app.chat_reads (request_id, user_id, read_at) values (rid, v, at)
+    on conflict (request_id, user_id) do update set read_at = excluded.read_at;
+  -- what neither person can see any more has no reason to exist
+  select min(h.hidden_at) into seen_by_all from app.chat_hides h where h.request_id = rid having count(*) = 2;
+  if seen_by_all is not null then delete from app.messages where request_id = rid and created_at <= seen_by_all; end if;
 end $$;
 
 -- ---------------------------------------------------------------------------

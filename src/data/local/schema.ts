@@ -151,6 +151,35 @@ export const migrations: string[] = [
   ALTER TABLE users ADD COLUMN pass_salt TEXT;
   ALTER TABLE users ADD COLUMN pass_hash TEXT;
   `,
+
+  // 7: safety. Who you've blocked, and reports (which, with no server, stay on this phone).
+  `
+  CREATE TABLE blocks (
+    user_id TEXT NOT NULL,
+    blocked_id TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, blocked_id)
+  );
+  CREATE TABLE reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    reporter_id TEXT NOT NULL,
+    about_id TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    note TEXT NOT NULL DEFAULT '',
+    context TEXT,
+    created_at INTEGER NOT NULL
+  );
+  `,
+
+  // 8: deleting a chat, for one side only. Messages after hidden_at show again.
+  `
+  CREATE TABLE chat_hides (
+    request_id INTEGER NOT NULL,
+    user_id TEXT NOT NULL,
+    hidden_at INTEGER NOT NULL,
+    PRIMARY KEY (request_id, user_id)
+  );
+  `,
 ];
 
-export const ALL_TABLES = ['replies', 'threads', 'posts', 'rooms', 'chat_reads', 'messages', 'requests', 'presence', 'saves', 'plays', 'tracks', 'users', 'meta'];
+export const ALL_TABLES = ['chat_hides', 'reports', 'blocks', 'replies', 'threads', 'posts', 'rooms', 'chat_reads', 'messages', 'requests', 'presence', 'saves', 'plays', 'tracks', 'users', 'meta'];

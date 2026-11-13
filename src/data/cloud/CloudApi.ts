@@ -20,6 +20,8 @@ import type {
   NowPlaying,
   Person,
   ProfileEdit,
+  ReportContext,
+  ReportReason,
   Room,
   RoomView,
   SendOutcome,
@@ -312,6 +314,9 @@ export class CloudApi implements EarshotApi {
   markChatRead(chatId: string) {
     return this.write<void>('mark_chat_read', { p_chat: chatId }, 'inbox');
   }
+  deleteChat(chatId: string) {
+    return this.write<void>('delete_chat', { p_chat: chatId }, 'inbox');
+  }
 
   // ---- city ---------------------------------------------------------------
 
@@ -342,6 +347,25 @@ export class CloudApi implements EarshotApi {
   async replyToThread(threadId: string, body: string, track?: Track | null) {
     if (!body.trim() && !track) return;
     await this.write<void>('reply_to_thread', { p_thread: threadId, p_body: body, p_track: track ?? null }, 'artist');
+  }
+
+  // ---- safety -------------------------------------------------------------
+
+  blockPerson(personId: string) {
+    return this.write<void>('block_person', { p_person: personId }, ...ALL);
+  }
+  unblockPerson(personId: string) {
+    return this.write<void>('unblock_person', { p_person: personId }, ...ALL);
+  }
+  getBlocked() {
+    return this.read<Person[]>('get_blocked');
+  }
+  async reportPerson(personId: string, reason: ReportReason, note: string, context: ReportContext) {
+    await this.call('report_person', { p_person: personId, p_reason: reason, p_note: note, p_context: context });
+  }
+  async deleteAccount() {
+    await this.call('delete_account');
+    await this.signOut();
   }
 
   // ---- crate, people, rooms -----------------------------------------------

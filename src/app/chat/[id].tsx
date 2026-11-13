@@ -101,6 +101,8 @@ export default function ChatScreen() {
 
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const [sure, setSure] = useState(false);
 
   // Seeing it counts as reading it.
   const count = chat?.messages.length ?? -1;
@@ -149,6 +151,23 @@ export default function ChatScreen() {
     }
   };
 
+  const remove = async () => {
+    if (!sure) {
+      setSure(true);
+      setTimeout(() => setSure(false), 4000);
+      return;
+    }
+    try {
+      await api.deleteChat(chat.id);
+      slip(`Chat deleted on your side. ${first} isn’t told and keeps their copy.`);
+      if (router.canGoBack()) router.back();
+      else router.replace('/inbox');
+    } catch {
+      setSure(false);
+      slip('Couldn’t delete that. Try again.');
+    }
+  };
+
   return (
     <Paper>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
@@ -169,6 +188,21 @@ export default function ChatScreen() {
           >
             <BackLink label="inbox" onPress={() => (router.canGoBack() ? router.back() : router.replace('/inbox'))} />
             <Pressable
+              onPress={() => {
+                setMenu((open) => !open);
+                setSure(false);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="More options for this chat"
+              accessibilityState={{ expanded: menu }}
+              hitSlop={10}
+              style={{ marginLeft: 14 }}
+            >
+              <Txt variant="small" tone="soft" style={{ textDecorationLine: 'underline' }}>
+                {menu ? 'less' : 'more'}
+              </Txt>
+            </Pressable>
+            <Pressable
               onPress={() => router.push({ pathname: '/room/[id]', params: { id: chat.other.id } })}
               accessibilityRole="button"
               accessibilityLabel={`Open ${chat.other.name}'s room`}
@@ -180,6 +214,27 @@ export default function ChatScreen() {
               <PinBadge label={chat.other.badge} color={chat.other.badgeColor} size={34} rotate={tilt(chat.other.id, 9)} />
             </Pressable>
           </View>
+
+          {menu ? (
+            <View style={{ paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: colors.ink, backgroundColor: colors.paper }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                <PosterButton label={sure ? 'tap again to delete' : 'delete chat'} kind={sure ? 'primary' : 'plain'} small onPress={remove} />
+                <PosterButton
+                  label="block or report"
+                  kind="plain"
+                  small
+                  onPress={() => {
+                    setMenu(false);
+                    router.push({ pathname: '/safety/[id]', params: { id: chat.other.id, kind: 'chat', cid: chat.id } });
+                  }}
+                />
+              </View>
+              <Txt variant="small" tone="soft" style={{ marginTop: 10 }}>
+                Deleting clears this chat from your side only. {first} keeps their copy, isn’t told, and isn’t blocked: if either of you
+                writes again, it starts fresh.
+              </Txt>
+            </View>
+          ) : null}
 
           <Pinned chat={chat} meId={meId} />
 

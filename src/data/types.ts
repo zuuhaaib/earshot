@@ -260,3 +260,10 @@ export type Thread = {
 
 /** An account that lives on the backend, as the phone needs to know it. */
 export type AdoptedAccount = Pick<Person, 'id' | 'name' | 'handle' | 'badge' | 'badgeColor' | 'tagline' | 'bio' | 'homeCity'>;
+
+// ---- safety ------------------------------------------------------------------
+
+export type ReportReason = 'harassment' | 'hate' | 'sexual' | 'spam' | 'impersonation' | 'underage' | 'other';
+
+/** What a report is about, beyond the person: a chat with them, one of their posts or threads, or their room. */
+export type ReportContext = { kind: 'chat' | 'post' | 'thread' | 'room'; id: string } | null;

@@ -11,6 +11,7 @@ import { TrackRow } from '@/ui/Field';
 import { Card, Heading, InkLink, Paper, PinBadge, PosterButton, Stamp, Txt } from '@/ui/print';
 import { useSlip } from '@/ui/Slip';
 import { PhoneImportCard } from '@/ui/PhoneImportCard';
+import { LastfmCard } from '@/ui/LastfmCard';
 import { SpotifyCard } from '@/ui/SpotifyCard';
 import { DashedRule } from '@/ui/SongCard';
 
@@ -115,6 +116,7 @@ export default function YouScreen() {
 
         <Heading style={{ marginTop: 34 }}>what you’re playing</Heading>
         <SpotifyCard userId={me.id} />
+        <LastfmCard userId={me.id} />
 
         <Heading style={{ marginTop: 34 }}>your crate</Heading>
         {crate?.length ? (
@@ -187,6 +189,10 @@ export default function YouScreen() {
           {me.seeded || phoneOnly || (!cloud && session.needsPassword) ? null : (
             <PosterButton label="change password" kind="plain" small onPress={() => router.push('/password')} />
           )}
+        </View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 22, marginTop: 18 }}>
+          <InkLink label="blocked people" onPress={() => router.push('/blocked')} />
+          {me.seeded || (cloud && !onServer) ? null : <InkLink label="delete account" onPress={() => router.push('/delete-account')} />}
         </View>
 
         {others.length ? (

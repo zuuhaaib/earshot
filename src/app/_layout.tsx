@@ -72,6 +72,9 @@ export default function RootLayout() {
               <Stack.Screen name="password" options={{ presentation: 'modal' }} />
               <Stack.Screen name="upgrade" options={{ presentation: 'modal' }} />
               <Stack.Screen name="finish-profile" options={{ animation: 'fade' }} />
+              <Stack.Screen name="safety/[id]" options={{ presentation: 'modal' }} />
+              <Stack.Screen name="blocked" options={{ presentation: 'modal' }} />
+              <Stack.Screen name="delete-account" options={{ presentation: 'modal' }} />
             </Stack>
           </SlipProvider>
         </DataProvider>
