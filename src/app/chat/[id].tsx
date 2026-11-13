@@ -53,7 +53,7 @@ function Pinned({ chat, meId }: { chat: Chat; meId: string }) {
   );
 }
 
-const Bubble = React.memo(function Bubble({ message, mine }: { message: ChatMessage; mine: boolean }) {
+const Bubble = React.memo(function Bubble({ message, mine, otherId }: { message: ChatMessage; mine: boolean; otherId: string }) {
   return (
     <View style={{ alignItems: mine ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
       <View
@@ -83,9 +83,23 @@ const Bubble = React.memo(function Bubble({ message, mine }: { message: ChatMess
         ) : null}
         {message.body ? <Txt variant="body">{message.body}</Txt> : null}
       </View>
-      <Txt variant="meta" tone="faint" style={{ marginTop: 3, fontSize: 10, lineHeight: 13 }}>
-        {clock(message.sentAt)}
-      </Txt>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 3 }}>
+        <Txt variant="meta" tone="faint" style={{ fontSize: 10, lineHeight: 13 }}>
+          {clock(message.sentAt)}
+        </Txt>
+        {mine ? null : (
+          <Pressable
+            onPress={() => router.push({ pathname: '/safety/[id]', params: { id: otherId, kind: 'message', cid: message.id } })}
+            accessibilityRole="link"
+            accessibilityLabel="Report this message"
+            hitSlop={12}
+          >
+            <Txt variant="meta" tone="faint" style={{ fontSize: 10, lineHeight: 13, textDecorationLine: 'underline' }}>
+              report
+            </Txt>
+          </Pressable>
+        )}
+      </View>
     </View>
   );
 });
@@ -242,7 +256,7 @@ export default function ChatScreen() {
             data={newestFirst}
             inverted
             keyExtractor={(m) => m.id}
-            renderItem={({ item }) => <Bubble message={item} mine={item.fromId === meId} />}
+            renderItem={({ item }) => <Bubble message={item} mine={item.fromId === meId} otherId={chat.other.id} />}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
             showsVerticalScrollIndicator={false}

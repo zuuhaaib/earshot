@@ -1199,14 +1199,15 @@ language sql stable security definer set search_path = '' as $$
   from app.blocks b join app.profiles p on p.id = b.blocked_id where b.user_id = app.me()
 $$;
 
--- Report someone. p_context says what it is about: {"kind": "chat" | "post" |
--- "thread" | "room", "id": "..."} or null for the person in general. The copy
+-- Report someone. p_context says what it is about: {"kind": "chat" | "message" |
+-- "post" | "thread" | "reply" | "room", "id": "..."} or null for the person in
+-- general ("message" and "reply" point at one thing they wrote). The copy
 -- that is kept is taken here, from the database, never from what the app sends.
 create or replace function public.report_person(p_person text, p_reason text, p_note text, p_context jsonb) returns void
 language plpgsql security definer set search_path = '' as $$
 declare
   v text := app.need_me(); at bigint := app.now_ms(); about app.profiles;
-  kind text := p_context ->> 'kind'; cid text := p_context ->> 'id'; copy jsonb;
+  kind text := p_context ->> 'kind'; cid text := p_context ->> 'id'; copy jsonb; chat_id bigint;
 begin
   if p_person = v then raise exception 'self'; end if;
   select * into about from app.profiles where id = p_person;
@@ -1222,6 +1223,20 @@ begin
         'messages', (select coalesce(jsonb_agg(jsonb_build_object('from', m.from_id, 'body', m.body, 'at', m.created_at) order by m.created_at, m.id), '[]'::jsonb)
                      from (select * from app.messages where request_id = cid::bigint order by created_at desc, id desc limit 30) m));
     end if;
+  elsif kind = 'message' and cid ~ '^[0-9]+$' then
+    -- one message of theirs, in a conversation the reporter is actually in, with what was said around it
+    select m.request_id into chat_id from app.messages m join app.requests q on q.id = m.request_id
+      where m.id = cid::bigint and m.from_id = p_person and (q.from_id = v or q.to_id = v);
+    if chat_id is not null then
+      copy := copy || jsonb_build_object('kind', 'message', 'id', cid, 'chat', chat_id::text,
+        'reported', (select jsonb_build_object('body', m.body, 'track', m.track_id, 'at', m.created_at) from app.messages m where m.id = cid::bigint),
+        'messages', (select coalesce(jsonb_agg(jsonb_build_object('from', m.from_id, 'body', m.body, 'at', m.created_at) order by m.created_at, m.id), '[]'::jsonb)
+                     from (select * from app.messages where request_id = chat_id order by created_at desc, id desc limit 30) m));
+    end if;
+  elsif kind = 'reply' and cid ~ '^[0-9]+$' then
+    copy := copy || coalesce((select jsonb_build_object('kind', 'reply', 'id', cid, 'thread', r.thread_id::text, 'title', t.title, 'body', r.body, 'track', r.track_id)
+                              from app.replies r join app.threads t on t.id = r.thread_id
+                              where r.id = cid::bigint and r.user_id = p_person), '{}'::jsonb);
   elsif kind = 'post' and cid ~ '^[0-9]+$' then
     copy := copy || coalesce((select jsonb_build_object('kind', 'post', 'id', cid, 'note', p.note, 'track', p.track_id)
                               from app.posts p where p.id = cid::bigint and p.user_id = p_person), '{}'::jsonb);

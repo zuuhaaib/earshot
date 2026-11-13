@@ -9,7 +9,7 @@ import { AuthError } from '@/data/api';
 import { cities } from '@/data/areas';
 import { colors, tilt } from '@/theme';
 import { BackLink, Field } from '@/ui/Field';
-import { CloudLogin, CloudSignUp, GoogleButton } from '@/ui/CloudAuth';
+import { CloudLogin, CloudSignUp, AppleButton, GoogleButton } from '@/ui/CloudAuth';
 import { AUTH_WORDS, authWords, LoginForm } from '@/ui/LoginForm';
 import { Card, Heading, InkLink, Paper, PinBadge, PosterButton, Stamp, Tape, Txt } from '@/ui/print';
 
@@ -146,6 +146,12 @@ export default function Welcome() {
               <PosterButton label="I’ve got one: log in" kind="plain" onPress={() => setStep('login')} style={{ marginTop: 12 }} />
               {cloud ? (
                 <View style={{ marginTop: 12 }}>
+                  <AppleButton
+                    onDone={() => {
+                      setBusy(true);
+                      router.replace('/');
+                    }}
+                  />
                   <GoogleButton
                     onDone={() => {
                       setBusy(true);
@@ -161,6 +167,18 @@ export default function Welcome() {
                   style={{ alignSelf: 'center', marginTop: 18 }}
                 />
               ) : null}
+              <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 22, marginTop: 20 }}>
+                <Pressable onPress={() => router.push('/privacy')} accessibilityRole="link" hitSlop={10}>
+                  <Txt variant="small" tone="soft" style={{ textDecorationLine: 'underline' }}>
+                    privacy
+                  </Txt>
+                </Pressable>
+                <Pressable onPress={() => router.push('/support')} accessibilityRole="link" hitSlop={10}>
+                  <Txt variant="small" tone="soft" style={{ textDecorationLine: 'underline' }}>
+                    help
+                  </Txt>
+                </Pressable>
+              </View>
             </View>
           )}
 

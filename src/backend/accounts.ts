@@ -8,6 +8,7 @@
  */
 import 'expo-sqlite/localStorage/install'; // gives Supabase somewhere on the phone to keep the session
 import { AppState, Platform } from 'react-native';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { makeRedirectUri } from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -45,6 +46,7 @@ export class CloudError extends Error {
       | 'too-many' // the server's rate limit
       | 'cancelled' // closed the Google window before finishing
       | 'google-off' // Google sign-in isn't switched on in the backend
+      | 'apple-off' // Sign in with Apple isn't switched on in the backend, or doesn't know this app
       | 'no-setup' // the database script hasn't been run
       | 'network',
     detail?: string,
@@ -65,6 +67,7 @@ const WORDS: Record<CloudError['code'], string> = {
   'bad-code': 'That code isn’t right, or it’s expired. Check the newest email, or send another.',
   'too-many': 'Too many attempts. The server’s asked everyone to slow down; wait a minute and try again.',
   cancelled: 'You closed the Google window before finishing. Nothing happened.',
+  'apple-off': 'Apple signed you in, but the backend didn’t accept it. In Supabase, under Authentication → Sign In / Providers → Apple, switch it on and add this app’s ID under Client IDs (host.exp.Exponent while testing in Expo Go).',
   'google-off': 'Google sign-in isn’t switched on for this backend yet. It needs enabling in the Supabase dashboard (Authentication → Sign In / Providers → Google).',
   'no-setup': 'The backend is reachable but its database hasn’t been set up. Run supabase/schema.sql in the Supabase SQL editor.',
   network: 'Couldn’t reach the server. Check your connection and try again.',
@@ -394,4 +397,52 @@ export async function signInWithGoogle(): Promise<CloudProfile> {
   const user = session.data.user;
   if (!user) throw new CloudError('network', 'no user after Google sign-in');
   return profileFor(user.id, user.email ?? '');
+}
+
+// ---- Sign in with Apple ---------------------------------------------------------
+
+/** Whether to offer Sign in with Apple: iPhones and iPads only, where Apple's own sheet does the work. */
+export async function appleAvailable(): Promise<boolean> {
+  if (Platform.OS !== 'ios' || !cloudConfigured()) return false;
+  return AppleAuthentication.isAvailableAsync().catch(() => false);
+}
+
+/**
+ * Sign in, or sign up, with an Apple ID. Apple proves who you are and hands
+ * the backend a signed token; earshot never sees your Apple password. People
+ * who choose "Hide My Email" get a relay address, which works the same. New
+ * people come back with `needsProfile` set and pick a handle and badge.
+ */
+export async function signInWithApple(): Promise<CloudProfile> {
+  let credential: AppleAuthentication.AppleAuthenticationCredential;
+  try {
+    credential = await AppleAuthentication.signInAsync({
+      requestedScopes: [AppleAuthentication.AppleAuthenticationScope.FULL_NAME, AppleAuthentication.AppleAuthenticationScope.EMAIL],
+    });
+  } catch (e) {
+    if ((e as { code?: string }).code === 'ERR_REQUEST_CANCELED') throw new CloudError('cancelled');
+    throw new CloudError('apple-off', String(e));
+  }
+  const token = credential.identityToken;
+  if (!token) throw new CloudError('apple-off', 'no identity token');
+
+  let user;
+  try {
+    const { data, error } = await supabase().auth.signInWithIdToken({ provider: 'apple', token });
+    if (error) {
+      if (error.status === 429) throw new CloudError('too-many', error.message);
+      throw new CloudError('apple-off', error.message);
+    }
+    user = data.user;
+  } catch (e) {
+    if (e instanceof CloudError) throw e;
+    throw new CloudError('network', String(e));
+  }
+  if (!user) throw new CloudError('network', 'no user after Apple sign-in');
+
+  // Apple only gives the name the very first time, so keep it with the login.
+  const parts = [credential.fullName?.givenName, credential.fullName?.familyName].filter(Boolean);
+  if (parts.length) await supabase().auth.updateUser({ data: { full_name: parts.join(' ') } }).catch(() => {});
+
+  return profileFor(user.id, user.email ?? credential.email ?? '');
 }

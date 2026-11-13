@@ -222,3 +222,39 @@ describe('deleting your account', () => {
     assert.equal((await api.db.query("select has_function_privilege('anon', 'public.delete_account()', 'execute') as ok")).rows[0].ok, false);
   });
 });
+
+describe('reporting one thing', () => {
+  test('a single message: keeps that message and the chat around it, only if it is theirs and you are in the chat', async () => {
+    const { api, anna, ben, chat } = await talking();
+    const msg = (await api.db.query('select id::text as id from app.messages limit 1')).rows[0].id;
+    await api.as(anna);
+    await api.rpc('report_person', { p_person: ben, p_reason: 'harassment', p_note: '', p_context: { kind: 'message', id: msg } });
+    const r = (await api.db.query('select context from app.reports')).rows[0].context;
+    assert.deepEqual([r.kind, r.id, r.chat, r.reported.body], ['message', msg, chat, 'thanks']);
+    assert.deepEqual(r.messages.map((m) => m.body), ['thanks']);
+
+    // an outsider pointing at the same message gets no copy of it
+    await api.signUp({ handle: 'carl' });
+    await api.rpc('report_person', { p_person: ben, p_reason: 'spam', p_note: '', p_context: { kind: 'message', id: msg } });
+    const outsider = (await api.db.query('select context from app.reports order by id desc limit 1')).rows[0].context;
+    assert.equal(outsider.reported, undefined);
+    assert.equal(outsider.messages, undefined);
+  });
+
+  test('a single reply: keeps what they wrote and which thread it was in', async () => {
+    const { api, anna, ben } = await neighbours();
+    await api.as(anna);
+    const thread = await api.rpc('start_thread', { p_artist: 'Joni Mitchell', p_title: 'Best live recording?', p_body: '' });
+    await api.as(ben);
+    await api.rpc('reply_to_thread', { p_thread: thread, p_body: 'something unkind', p_track: null });
+    const reply = (await api.db.query('select id::text as id from app.replies limit 1')).rows[0].id;
+    await api.as(anna);
+    await api.rpc('report_person', { p_person: ben, p_reason: 'hate', p_note: '', p_context: { kind: 'reply', id: reply } });
+    const r = (await api.db.query('select context from app.reports')).rows[0].context;
+    assert.deepEqual([r.kind, r.thread, r.title, r.body], ['reply', thread, 'Best live recording?', 'something unkind']);
+
+    // pointing at a reply that isn't theirs copies nothing extra
+    await api.rpc('report_person', { p_person: ben, p_reason: 'hate', p_note: '', p_context: { kind: 'reply', id: '999' } });
+    assert.equal((await api.db.query('select context from app.reports order by id desc limit 1')).rows[0].context.body, undefined);
+  });
+});

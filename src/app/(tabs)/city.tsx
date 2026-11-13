@@ -172,7 +172,21 @@ const PostCard = React.memo(function PostCard({
           />
         </View>
 
-        <InkLink label={`${post.track.artist} · ${post.city}`} onPress={() => onOpenArtist(post.track.artist)} style={{ alignSelf: 'flex-start', marginTop: 14 }} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 14 }}>
+          <InkLink label={`${post.track.artist} · ${post.city}`} onPress={() => onOpenArtist(post.track.artist)} style={{ flexShrink: 1 }} />
+          {post.mine ? null : (
+            <Pressable
+              onPress={() => router.push({ pathname: '/safety/[id]', params: { id: post.person.id, kind: 'post', cid: post.id } })}
+              accessibilityRole="link"
+              accessibilityLabel="Report this post"
+              hitSlop={12}
+            >
+              <Txt variant="meta" tone="faint" style={{ textDecorationLine: 'underline' }}>
+                report
+              </Txt>
+            </Pressable>
+          )}
+        </View>
       </Card>
     </View>
   );

@@ -265,5 +265,8 @@ export type AdoptedAccount = Pick<Person, 'id' | 'name' | 'handle' | 'badge' | '
 
 export type ReportReason = 'harassment' | 'hate' | 'sexual' | 'spam' | 'impersonation' | 'underage' | 'other';
 
-/** What a report is about, beyond the person: a chat with them, one of their posts or threads, or their room. */
-export type ReportContext = { kind: 'chat' | 'post' | 'thread' | 'room'; id: string } | null;
+/**
+ * What a report is about, beyond the person: a chat with them or one message in
+ * it, one of their city posts, a thread they started or one reply, or their room.
+ */
+export type ReportContext = { kind: 'chat' | 'message' | 'post' | 'thread' | 'reply' | 'room'; id: string } | null;

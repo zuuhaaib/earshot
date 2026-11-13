@@ -17,6 +17,23 @@ import { ago } from '@/ui/SongPicker';
 
 const openRoom = (id: string) => router.push({ pathname: '/room/[id]', params: { id } });
 
+/** A quiet "report" link under something someone else wrote. */
+function ReportLink({ personId, kind, id }: { personId: string; kind: 'thread' | 'reply'; id: string }) {
+  return (
+    <Pressable
+      onPress={() => router.push({ pathname: '/safety/[id]', params: { id: personId, kind, cid: id } })}
+      accessibilityRole="link"
+      accessibilityLabel={kind === 'reply' ? 'Report this reply' : 'Report this thread'}
+      hitSlop={12}
+      style={{ alignSelf: 'flex-start', marginTop: 10 }}
+    >
+      <Txt variant="meta" tone="faint" style={{ textDecorationLine: 'underline' }}>
+        report
+      </Txt>
+    </Pressable>
+  );
+}
+
 function Byline({ person, when, city, threadCity }: { person: Person; when: number; city?: boolean; threadCity: string }) {
   return (
     <Pressable
@@ -40,7 +57,7 @@ function Byline({ person, when, city, threadCity }: { person: Person; when: numb
   );
 }
 
-const Reply = React.memo(function Reply({ reply, threadCity }: { reply: ThreadReply; threadCity: string }) {
+const Reply = React.memo(function Reply({ reply, threadCity, meId }: { reply: ThreadReply; threadCity: string; meId: string }) {
   return (
     <View style={{ paddingVertical: 14 }}>
       <Byline person={reply.person} when={reply.at} city threadCity={threadCity} />
@@ -62,6 +79,7 @@ const Reply = React.memo(function Reply({ reply, threadCity }: { reply: ThreadRe
           </View>
         </View>
       ) : null}
+      {reply.person.id === meId ? null : <ReportLink personId={reply.person.id} kind="reply" id={reply.id} />}
     </View>
   );
 });
@@ -83,6 +101,7 @@ export default function ThreadScreen() {
   useEffect(() => () => stopPreview(), []);
 
   if (loading || !session?.me) return <Paper />;
+  const meId = session.me.id;
 
   if (!thread) {
     return (
@@ -125,7 +144,7 @@ export default function ThreadScreen() {
             ref={list}
             data={thread.replies}
             keyExtractor={(r) => r.id}
-            renderItem={({ item }) => <Reply reply={item} threadCity={thread.city} />}
+            renderItem={({ item }) => <Reply reply={item} threadCity={thread.city} meId={meId} />}
             ItemSeparatorComponent={DashedRule}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
@@ -152,6 +171,7 @@ export default function ThreadScreen() {
                   <View style={{ marginTop: 14 }}>
                     <Byline person={thread.starter} when={thread.startedAt} threadCity={thread.city} />
                   </View>
+                  {thread.starter.id === meId ? null : <ReportLink personId={thread.starter.id} kind="thread" id={thread.id} />}
                 </Card>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 20 }}>
                   <Stamp rotate={-2}>{thread.replies.length === 1 ? '1 reply' : `${thread.replies.length} replies`}</Stamp>

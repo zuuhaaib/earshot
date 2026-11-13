@@ -285,6 +285,15 @@ export default function YouScreen() {
           style={{ alignSelf: 'flex-start', marginTop: 16 }}
         />
 
+        <Heading style={{ marginTop: 34 }}>help and privacy</Heading>
+        <Txt variant="body" tone="soft">
+          Quick answers and how to reach a person, and exactly what earshot keeps about you.
+        </Txt>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 22, marginTop: 14 }}>
+          <InkLink label="help and contact" onPress={() => router.push('/support')} />
+          <InkLink label="privacy" onPress={() => router.push('/privacy')} />
+        </View>
+
         <Heading style={{ marginTop: 34 }}>the small print</Heading>
         <Txt variant="body" tone="soft">
           {onServer

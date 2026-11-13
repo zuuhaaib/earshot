@@ -1,0 +1,45 @@
+{
+  "title": "Help",
+  "intro": "The quick answers are below. For anything else, write to {email} and a person will reply.",
+  "sections": [
+    {
+      "heading": "Someone is bothering me",
+      "points": [
+        "Block them: open their room, or a chat with them, and tap “block or report”. You stop seeing each other everywhere, and they are not told.",
+        "Report them: the same screen. You can also tap “report” under a single message, a city post, a thread or a reply. Reports go to the people who run earshot, not to a machine.",
+        "If you or someone else is in danger right now, call your local emergency number first."
+      ]
+    },
+    {
+      "heading": "Who can see me",
+      "points": [
+        "Only people in the same rough area, and only while the ON AIR switch on the Nearby tab is on. Switch it off and you vanish from their screens at once.",
+        "Nobody ever sees where you are. There are no maps or distances anywhere in earshot."
+      ]
+    },
+    {
+      "heading": "My song isn’t updating",
+      "points": [
+        "With Spotify linked, earshot checks every 20 seconds while the app is open. Tap “check now” on the Spotify card on the You tab.",
+        "With Last.fm linked, it checks every 30 seconds, and Last.fm itself can run a minute behind. Make sure Spotify is connected inside your Last.fm settings, and that your recent listening isn’t hidden there.",
+        "You can always set a song by hand from the Nearby tab."
+      ]
+    },
+    {
+      "heading": "I can’t log in",
+      "points": [
+        "Tap “forgot password” on the log-in screen. A six-digit code is sent to your email address.",
+        "If you signed up with Google or Apple, use that same button again. There is no separate earshot password for those accounts."
+      ]
+    },
+    {
+      "heading": "Deleting things",
+      "points": [
+        "A chat: open it, tap “more”, then “delete chat”. It goes from your side only.",
+        "A city post: tap “take it down” on your own post.",
+        "Your whole account: on the You tab, tap “delete account”. It is permanent and happens straight away.",
+        "If you can’t get into your account and want it deleted, write to {email} from the email address the account uses."
+      ]
+    }
+  ]
+}

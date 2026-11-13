@@ -6,9 +6,11 @@
  */
 import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Haptics from 'expo-haptics';
 import { useApi } from '@/data';
 import {
+  appleAvailable,
   CloudError,
   cloudWords,
   confirmEmail,
@@ -19,6 +21,7 @@ import {
   looksLikeEmail,
   resendCode,
   sendReset,
+  signInWithApple,
   signInWithGoogle,
   signUp,
   type CloudProfile,
@@ -207,6 +210,59 @@ export function GoogleButton({ onDone }: { onDone: (account: CloudProfile) => vo
             </>
           )}
         </View>
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * "Continue with Apple", on iPhones and iPads. It uses Apple's own button, as
+ * Apple requires, and sits above Google so neither is favoured.
+ */
+export function AppleButton({ onDone }: { onDone: (account: CloudProfile) => void | Promise<void> }) {
+  const api = useApi();
+  const [available, setAvailable] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    appleAvailable().then((yes) => alive && setAvailable(yes));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (!available) return null;
+
+  const go = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const account = await signInWithApple();
+      success();
+      await api.adoptAccount(account);
+      await onDone(account);
+    } catch (e) {
+      if (!(e instanceof CloudError && e.code === 'cancelled')) setError(cloudWords(e));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <View style={{ marginBottom: 12, opacity: busy ? 0.5 : 1 }}>
+      <AppleAuthentication.AppleAuthenticationButton
+        buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+        buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+        cornerRadius={3}
+        style={{ width: '100%', height: 50 }}
+        onPress={go}
+      />
+      {error ? (
+        <Txt variant="small" tone="accent" style={{ marginTop: 8 }}>
+          {error}
+        </Txt>
       ) : null}
     </View>
   );
@@ -481,6 +537,7 @@ export function CloudLogin({ onDone }: { onDone: (account: CloudProfile) => void
 
   return (
     <View>
+      <AppleButton onDone={onDone} />
       <GoogleButton onDone={onDone} />
       <Or />
       <Field

@@ -20,7 +20,24 @@ const REASONS: { id: ReportReason; label: string }[] = [
   { id: 'other', label: 'Something else' },
 ];
 const NOTE_MAX = 500;
-const KINDS = ['chat', 'post', 'thread', 'room'] as const;
+const KINDS = ['chat', 'message', 'post', 'thread', 'reply', 'room'] as const;
+/** What gets copied into the report for whoever reads it, by where the report was started. */
+const COPIED: Record<(typeof KINDS)[number], string> = {
+  chat: 'your recent chat with them and their profile',
+  message: 'that message, the recent chat around it and their profile',
+  post: 'that post and their profile',
+  thread: 'what they wrote in that thread and their profile',
+  reply: 'that reply and their profile',
+  room: 'their room and profile',
+};
+const ABOUT: Record<(typeof KINDS)[number], string> = {
+  chat: 'your chat with them',
+  message: 'a message they sent you',
+  post: 'one of their city posts',
+  thread: 'a thread they started',
+  reply: 'a reply they wrote',
+  room: 'their room',
+};
 
 /** Leave every screen that was showing this person; they no longer exist as far as you can see. */
 function backToStart() {
@@ -117,11 +134,15 @@ export default function Safety() {
           <Heading style={{ marginTop: 34 }}>{`report ${first.toLowerCase()}`}</Heading>
           <Txt variant="body" tone="soft" style={{ marginBottom: 12 }}>
             {onServer
-              ? `A report goes to the people who run earshot, with a copy of ${
-                  kind === 'chat' ? 'your recent chat with them and their profile' : kind === 'room' ? 'their room and profile' : 'their profile'
-                } so it can be checked. ${first} is not told who reported them, or that anyone did.`
+              ? `A report goes to the people who run earshot, with a copy of ${kind ? COPIED[kind] : 'their profile'} so it can be checked. ${first} is not told who reported them, or that anyone did.`
               : 'This version of earshot has no server, so there is nobody to send a report to. It is saved on this phone and goes nowhere. Blocking works as described above.'}
           </Txt>
+
+          {kind ? (
+            <Txt variant="label" tone="accent" style={{ marginBottom: 12 }}>
+              This report is about {ABOUT[kind]}
+            </Txt>
+          ) : null}
 
           {REASONS.map((r) => {
             const on = reason === r.id;
