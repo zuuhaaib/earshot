@@ -58,7 +58,9 @@ export default function PlaceScreen() {
     setNotice(
       result.reason === 'denied'
         ? 'No location, no problem. Pick a spot below and everything works exactly the same.'
-        : 'Your phone couldn’t work out where it is just now. Pick a spot below instead.',
+        : result.reason === 'off'
+          ? 'Location is switched off in your phone’s settings. Turn it on and try again, or pick a spot below.'
+          : 'Your phone couldn’t work out where it is just now. Pick a spot below instead.',
     );
   };
 

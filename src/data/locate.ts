@@ -9,15 +9,17 @@ import * as Location from 'expo-location';
 import { areaFromCoords } from './areas';
 import type { Area } from './types';
 
-export type LocateResult = { ok: true; area: Area } | { ok: false; reason: 'denied' | 'unavailable' };
+export type LocateResult = { ok: true; area: Area } | { ok: false; reason: 'denied' | 'off' | 'unavailable' };
 
 const timeout = <T,>(ms: number) => new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms));
 
 async function read(): Promise<Area> {
-  const pos = await Promise.race([
-    Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Low }),
-    timeout<Location.LocationObject>(15_000),
-  ]);
+  // A position the phone already has from the last ten minutes is plenty for a neighbourhood, and instant.
+  const recent = await Location.getLastKnownPositionAsync({ maxAge: 10 * 60_000 }).catch(() => null);
+  // Not "Low": on Android that never wakes the location hardware, so it waits for another app to ask and times out.
+  const pos =
+    recent ??
+    (await Promise.race([Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }), timeout<Location.LocationObject>(20_000)]));
   return areaFromCoords(pos.coords.latitude, pos.coords.longitude);
 }
 
@@ -26,6 +28,7 @@ export async function locateArea(): Promise<LocateResult> {
   try {
     const perm = await Location.requestForegroundPermissionsAsync();
     if (!perm.granted) return { ok: false, reason: 'denied' };
+    if (!(await Location.hasServicesEnabledAsync().catch(() => true))) return { ok: false, reason: 'off' };
     return { ok: true, area: await read() };
   } catch {
     return { ok: false, reason: 'unavailable' };
