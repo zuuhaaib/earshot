@@ -1400,6 +1400,63 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
+-- report alerts: an email for every new report
+-- ---------------------------------------------------------------------------
+-- Each new report is emailed to whoever runs earshot, through Resend. Nothing
+-- is sent until two secrets exist in Supabase's encrypted store (Vault). Run
+-- these once in the SQL editor, with your own values; never put them in a file:
+--
+--   select vault.create_secret('re_your_resend_key', 'resend_api_key');
+--   select vault.create_secret('you@example.com', 'report_alert_to');
+--
+-- With no domain of your own, Resend only delivers to the address the Resend
+-- account was made with, so report_alert_to must be that address.
+-- The email is queued and sent after the report is saved: a slow or failed
+-- email never stops a report. Failures show up in net._http_response.
+
+do $$
+begin
+  create extension if not exists pg_net;
+exception when others then
+  raise notice 'pg_net is not available here, so report emails are off: %', sqlerrm;
+end $$;
+
+create or replace function app.alert_report() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare key text; send_to text; reporter text;
+begin
+  begin
+    select decrypted_secret into key from vault.decrypted_secrets where name = 'resend_api_key';
+    select decrypted_secret into send_to from vault.decrypted_secrets where name = 'report_alert_to';
+    if coalesce(key, '') = '' or coalesce(send_to, '') = '' then return null; end if;
+    select handle into reporter from app.profiles where id = new.reporter_id;
+    perform net.http_post(
+      url := 'https://api.resend.com/emails',
+      headers := jsonb_build_object('Authorization', 'Bearer ' || key, 'Content-Type', 'application/json'),
+      body := jsonb_build_object(
+        'from', 'earshot reports <onboarding@resend.dev>',
+        'to', jsonb_build_array(send_to),
+        'subject', 'earshot report: @' || new.about_handle || ' (' || new.reason || ')',
+        'text',
+          'Someone reported @' || new.about_handle || '.' || chr(10) || chr(10)
+          || 'Reason: ' || new.reason || chr(10)
+          || 'Their note: ' || coalesce(nullif(new.note, ''), '(none)') || chr(10)
+          || 'Reported by: ' || coalesce('@' || reporter, '(unknown)') || chr(10)
+          || 'Report number: ' || new.id || chr(10) || chr(10)
+          || 'What was copied when they reported it:' || chr(10)
+          || coalesce(jsonb_pretty(new.context), '(nothing)') || chr(10) || chr(10)
+          || 'When it is dealt with, mark it in the Supabase SQL editor:' || chr(10)
+          || 'update app.reports set handled = true where id = ' || new.id || ';'));
+  exception when others then
+    raise warning 'report % was saved, but its email could not be queued: %', new.id, sqlerrm;
+  end;
+  return null;
+end $$;
+
+drop trigger if exists alert_report on app.reports;
+create trigger alert_report after insert on app.reports for each row execute function app.alert_report();
+
+-- ---------------------------------------------------------------------------
 -- who may call what
 -- ---------------------------------------------------------------------------
 -- Only signed-in people may call the app's functions. The two exceptions are

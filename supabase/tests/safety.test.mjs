@@ -258,3 +258,50 @@ describe('reporting one thing', () => {
     assert.equal((await api.db.query('select context from app.reports order by id desc limit 1')).rows[0].context.body, undefined);
   });
 });
+
+describe('report alerts', () => {
+  // Supabase's Vault and pg_net, stood in for: secrets in a table, and outgoing requests written down.
+  const standIns = `
+    create schema if not exists vault;
+    create table vault.decrypted_secrets (name text, decrypted_secret text);
+    create schema if not exists net;
+    create table net.sent (url text, headers jsonb, body jsonb);
+    create function net.http_post(url text, body jsonb default '{}', params jsonb default '{}', headers jsonb default '{}', timeout_milliseconds integer default 5000)
+      returns bigint language plpgsql as $$ begin insert into net.sent values (url, headers, body); return 1; end $$;
+  `;
+  const secrets = "insert into vault.decrypted_secrets values ('resend_api_key', 're_test_key'), ('report_alert_to', 'reports@example.com')";
+
+  test('emails each new report, with what was reported and how to mark it handled', async () => {
+    const { api, anna, ben, chat } = await talking();
+    await api.db.exec(standIns + ';' + secrets);
+    await api.as(anna);
+    await api.rpc('report_person', { p_person: ben, p_reason: 'harassment', p_note: 'kept going', p_context: { kind: 'chat', id: chat } });
+
+    const sent = (await api.db.query('select * from net.sent')).rows;
+    assert.equal(sent.length, 1);
+    const [mail] = sent;
+    assert.equal(mail.url, 'https://api.resend.com/emails');
+    assert.equal(mail.headers.Authorization, 'Bearer re_test_key');
+    assert.deepEqual(mail.body.to, ['reports@example.com']);
+    assert.equal(mail.body.subject, 'earshot report: @ben (harassment)');
+    for (const part of ['kept going', 'Reported by: @anna', '"thanks"', 'update app.reports set handled = true']) assert.ok(mail.body.text.includes(part), part);
+  });
+
+  test('sends nothing until both secrets are set, and the report is saved either way', async () => {
+    const { api, anna, ben } = await neighbours();
+    await api.db.exec(standIns);
+    await api.as(anna);
+    await api.rpc('report_person', { p_person: ben, p_reason: 'spam', p_note: '', p_context: null });
+    assert.equal((await api.db.query('select count(*)::int as n from net.sent')).rows[0].n, 0);
+    assert.equal((await api.db.query('select count(*)::int as n from app.reports')).rows[0].n, 1);
+  });
+
+  test('a broken email never stops a report', async () => {
+    const { api, anna, ben } = await neighbours(); // no Vault and no pg_net at all here
+    await api.as(anna);
+    assert.equal(await api.fails('report_person', { p_person: ben, p_reason: 'spam', p_note: '', p_context: null }), null);
+    await api.db.exec(standIns + ';' + secrets + "; create or replace function net.http_post(url text, body jsonb default '{}', params jsonb default '{}', headers jsonb default '{}', timeout_milliseconds integer default 5000) returns bigint language plpgsql as $$ begin raise exception 'resend is down'; end $$;");
+    assert.equal(await api.fails('report_person', { p_person: ben, p_reason: 'hate', p_note: '', p_context: null }), null);
+    assert.equal((await api.db.query('select count(*)::int as n from app.reports')).rows[0].n, 2);
+  });
+});
