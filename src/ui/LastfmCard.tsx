@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useApi } from '@/data';
 import { lastfmConfigured } from '@/lastfm/config';
+import { SPOTIFY_ENABLED } from '@/spotify/config';
 import { checkLastfm, connectLastfm, disconnectLastfm, lastfmWords, useLastfm } from '@/lastfm/sync';
 import { colors } from '@/theme';
 import { Field } from './Field';
@@ -57,7 +58,7 @@ export function LastfmCard({ userId }: { userId: string }) {
   const problem = error ?? lastfm.problem;
 
   return (
-    <Card rotate={0.5} style={{ marginTop: 18 }} innerStyle={{ padding: 16 }}>
+    <Card rotate={0.5} style={{ marginTop: SPOTIFY_ENABLED ? 18 : 0 }} innerStyle={{ padding: 16 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
         <Txt variant="title" style={{ fontSize: 19, lineHeight: 24 }}>
           Last.fm
@@ -87,8 +88,10 @@ export function LastfmCard({ userId }: { userId: string }) {
       ) : (
         <>
           <Txt variant="body" style={{ marginTop: 8 }}>
-            The other way to have your songs set themselves, if the Spotify link above isn’t open to you. It works with most
-            players, Spotify and Apple Music included, by way of a free Last.fm account.
+            {SPOTIFY_ENABLED
+              ? 'The other way to have your songs set themselves, if the Spotify link above isn’t open to you.'
+              : 'Have your songs set themselves, so you can stop telling earshot what you’re playing.'}{' '}
+            It works with most players, Spotify and Apple Music included, by way of a free Last.fm account.
           </Txt>
           <View style={{ gap: 10, marginTop: 12 }}>
             {PROMISES.map((p, i) => (

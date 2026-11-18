@@ -5,5 +5,5 @@ import privacy from '@/legal/privacy.json';
 import { LegalPageView } from '@/ui/LegalPage';
 
 export default function Privacy() {
-  return <LegalPageView page={privacy as LegalPage} other={{ label: 'help and contact', href: '/support' }} />;
+  return <LegalPageView page={privacy as LegalPage} other={{ label: 'terms', href: '/terms' }} />;
 }

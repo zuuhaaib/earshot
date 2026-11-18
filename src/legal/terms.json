@@ -1,0 +1,52 @@
+{
+  "title": "Terms",
+  "updated": "16 November 2026",
+  "intro": "These are the rules for using earshot. By making an account you agree to them. They are short on purpose.",
+  "sections": [
+    {
+      "heading": "Who can use earshot",
+      "points": [
+        "You must be {age} or older.",
+        "One person, one account. Keep your login to yourself; what happens on your account is yours to answer for."
+      ]
+    },
+    {
+      "heading": "What is not allowed",
+      "points": [
+        "There is no tolerance for objectionable content or abusive behaviour. That means: harassing, threatening or bullying anyone; hateful content about who people are; sexual content or advances nobody asked for, and anything sexual involving a minor; spam, scams or selling; pretending to be someone else; sharing someone’s private information; anything illegal.",
+        "This applies everywhere you can write or choose something: your name, handle and bio, song notes, chat messages, your room, guestbook signatures, city posts, threads and replies.",
+        "Do not try to work out or reveal where another person is. earshot is built so that nobody can, and trying is a breach of these terms."
+      ]
+    },
+    {
+      "heading": "What happens if you break the rules",
+      "points": [
+        "Anyone can report you, and reports are looked at within 24 hours.",
+        "Content that breaks these rules is removed, and the account that posted it can be suspended or deleted, without warning.",
+        "If you see something that breaks the rules, report it from inside the app or write to {email}."
+      ]
+    },
+    {
+      "heading": "Your things",
+      "points": [
+        "What you write and post stays yours. By posting it you allow earshot to store it and show it to other people in the ways the app describes.",
+        "You can delete it. Deleting your account removes everything attached to it, as the privacy page sets out."
+      ]
+    },
+    {
+      "heading": "The music",
+      "points": [
+        "Song details, artwork and 30-second previews come from Apple’s iTunes catalogue and belong to their owners. earshot does not host or sell music."
+      ]
+    },
+    {
+      "heading": "The usual",
+      "points": [
+        "earshot is provided as it is. It may change, break or stop, and it comes with no guarantee that it will always be available or free of faults.",
+        "You can stop using earshot and delete your account at any time. earshot can end or suspend an account that breaks these terms.",
+        "If these terms change, the date at the top changes with them. Carrying on using earshot after a change means you accept it.",
+        "Questions go to {email}."
+      ]
+    }
+  ]
+}

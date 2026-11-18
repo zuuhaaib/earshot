@@ -8,6 +8,7 @@ import { cloudConfigured } from '@/backend/config';
 import { AuthError } from '@/data/api';
 import { cities } from '@/data/areas';
 import { colors, tilt } from '@/theme';
+import { Agree } from '@/ui/Agree';
 import { BackLink, Field } from '@/ui/Field';
 import { CloudLogin, CloudSignUp, AppleButton, GoogleButton } from '@/ui/CloudAuth';
 import { AUTH_WORDS, authWords, LoginForm } from '@/ui/LoginForm';
@@ -55,6 +56,7 @@ export default function Welcome() {
   const [city, setCity] = useState<string>(cities[0]);
   const [nameError, setNameError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [agreed, setAgreed] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
   const [handleError, setHandleError] = useState<string | null>(null);
   const [password, setPassword] = useState('');
@@ -402,7 +404,8 @@ export default function Welcome() {
               </Card>
 
               <View style={{ flex: 1, minHeight: 28 }} />
-              <PosterButton label={busy ? 'pressing your badge…' : 'that’s me. let’s go'} disabled={busy} onPress={create} />
+              <Agree value={agreed} onChange={setAgreed} />
+              <PosterButton label={busy ? 'pressing your badge…' : 'that’s me. let’s go'} disabled={busy || !agreed} onPress={create} style={{ marginTop: 20 }} />
             </View>
           )}
 

@@ -20,7 +20,6 @@
     {
       "heading": "My song isn’t updating",
       "points": [
-        "With Spotify linked, earshot checks every 20 seconds while the app is open. Tap “check now” on the Spotify card on the You tab.",
         "With Last.fm linked, it checks every 30 seconds, and Last.fm itself can run a minute behind. Make sure Spotify is connected inside your Last.fm settings, and that your recent listening isn’t hidden there.",
         "You can always set a song by hand from the Nearby tab."
       ]

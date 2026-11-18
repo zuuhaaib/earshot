@@ -11,7 +11,18 @@ export const SPOTIFY_CLIENT_ID = process.env.EXPO_PUBLIC_SPOTIFY_CLIENT_ID ?? ''
 /** Read what's playing, and nothing else. No playlists, no library, no playback control. */
 export const SPOTIFY_SCOPES = ['user-read-currently-playing'];
 
-export const spotifyConfigured = () => SPOTIFY_CLIENT_ID.trim().length > 0;
+/**
+ * Spotify linking is switched off for now. Spotify only lets an app talk to
+ * accounts added by hand until the app is far bigger, so for almost everyone
+ * the button could only fail. Last.fm does the same job in the meantime.
+ *
+ * To bring it back: set this to true, and put the Spotify line back in the
+ * "My song isn't updating" section of src/legal/support.json. Nothing else was
+ * removed.
+ */
+export const SPOTIFY_ENABLED = false;
+
+export const spotifyConfigured = () => SPOTIFY_ENABLED && SPOTIFY_CLIENT_ID.trim().length > 0;
 
 export const SPOTIFY = {
   authorize: 'https://accounts.spotify.com/authorize',

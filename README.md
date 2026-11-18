@@ -64,10 +64,11 @@ Never put a Supabase secret key, the database password, the Spotify client secre
 ## Setting up the backend
 
 1. Create a Supabase project and copy its URL and publishable key into `.env`.
-2. In the SQL editor, run [supabase/schema.sql](supabase/schema.sql), then [supabase/seed.sql](supabase/seed.sql). The first builds the database. The second moves the residents in. Both are safe to run again, though re-running the seed resets the residents' rooms.
-3. Under Authentication, turn on the sign-in methods you want: email, Google, Apple.
-4. Add `earshot://**` to the allowed redirect URLs.
-5. For Last.fm, save your key as an Edge Function secret called `LASTFM_API_KEY` and deploy [supabase/functions/lastfm](supabase/functions/lastfm/index.ts). The key stays on the server and never reaches a phone.
+2. In the SQL editor, run [supabase/schema.sql](supabase/schema.sql). It builds the database and is safe to run again.
+3. While you are building, you can also run [supabase/seed.sql](supabase/seed.sql), which moves the fictional residents in so the app isn't empty. Don't run it on a project real people use. If you already have, [supabase/remove-residents.sql](supabase/remove-residents.sql) moves them out again, for good.
+4. Under Authentication, turn on the sign-in methods you want: email, Google, Apple.
+5. Add `earshot://**` to the allowed redirect URLs.
+6. For Last.fm, save your key as an Edge Function secret called `LASTFM_API_KEY` and deploy [supabase/functions/lastfm](supabase/functions/lastfm/index.ts). The key stays on the server and never reaches a phone.
 
 Whenever `schema.sql` changes, run it again. It upgrades in place.
 
@@ -135,6 +136,6 @@ earshot is meant to feel like a zine, a gig poster and the staff-picks shelf of 
 
 - Reports land in a database table. Reading them means opening Supabase.
 - There are no push notifications, so you only find out about a new song when the app is open.
-- The residents on the server never accept a song. They are scenery with good taste.
+- With the residents moved out, a new city is empty until real people turn up. That part is on you.
 - Spotify only works for accounts added by hand in its developer dashboard, which is why Last.fm exists.
 - Sign in with Apple is iPhone and iPad only.

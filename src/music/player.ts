@@ -6,9 +6,11 @@ import { useSyncExternalStore } from 'react';
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import type { Track } from './types';
 
-type State = { trackId: string | null; playing: boolean; failed: string | null };
+/** Where to hear the whole song: the catalogue id of what's previewing, and its title for the label. */
+export type PreviewLink = { sourceId: string; title: string };
+type State = { trackId: string | null; playing: boolean; failed: string | null; link: PreviewLink | null };
 
-let state: State = { trackId: null, playing: false, failed: null };
+let state: State = { trackId: null, playing: false, failed: null, link: null };
 const listeners = new Set<() => void>();
 const set = (next: Partial<State>) => {
   state = { ...state, ...next };
@@ -23,13 +25,13 @@ function getPlayer(): AudioPlayer {
   // Play previews even when the phone's silent switch is on: you tapped play.
   setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
   player.addListener('playbackStatusUpdate', (status) => {
-    if (status.didJustFinish) set({ trackId: null, playing: false });
+    if (status.didJustFinish) set({ trackId: null, playing: false, link: null });
     else if (state.trackId && status.isLoaded && status.playing !== state.playing) set({ playing: status.playing });
   });
   return player;
 }
 
-export function togglePreview(track: Pick<Track, 'id' | 'previewUrl'>) {
+export function togglePreview(track: Pick<Track, 'id' | 'previewUrl'> & Partial<Pick<Track, 'sourceId' | 'title'>>) {
   if (!track.previewUrl) {
     set({ failed: track.id });
     return;
@@ -48,9 +50,11 @@ export function togglePreview(track: Pick<Track, 'id' | 'previewUrl'>) {
     }
     p.replace({ uri: track.previewUrl });
     p.play();
-    set({ trackId: track.id, playing: true, failed: null });
+    // previews come from Apple's catalogue, where ids are plain numbers; anything else has no page to link to
+    const numeric = !!track.sourceId && [...track.sourceId].every((c) => c >= '0' && c <= '9');
+    set({ trackId: track.id, playing: true, failed: null, link: numeric ? { sourceId: track.sourceId!, title: track.title ?? 'this song' } : null });
   } catch {
-    set({ trackId: null, playing: false, failed: track.id });
+    set({ trackId: null, playing: false, failed: track.id, link: null });
   }
 }
 
@@ -59,7 +63,7 @@ export function stopPreview() {
   try {
     player.pause();
   } catch {}
-  set({ trackId: null, playing: false });
+  set({ trackId: null, playing: false, link: null });
 }
 
 const subscribe = (l: () => void) => {
@@ -73,5 +77,14 @@ export function useIsPlaying(trackId: string): boolean {
     subscribe,
     () => state.trackId === trackId && state.playing,
     () => false,
+  );
+}
+
+/** The song whose preview is loaded right now, for the "hear all of it" link. Null when nothing is. */
+export function usePreviewLink(): PreviewLink | null {
+  return useSyncExternalStore(
+    subscribe,
+    () => state.link,
+    () => null,
   );
 }

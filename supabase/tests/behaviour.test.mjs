@@ -18,7 +18,13 @@ describe('nearby', () => {
 
     await api.rpc('set_area', QW);
     await api.rpc('pulse');
-    const feed = await api.rpc('get_nearby');
+    let feed = await api.rpc('get_nearby');
+    // who's mid-song is down to chance; about one street in a hundred starts with nobody playing, so give it a minute
+    for (let i = 0; i < 20 && !feed.some((s) => s.status === 'playing'); i++) {
+      await api.clock.advance(30_000);
+      await api.rpc('pulse');
+      feed = await api.rpc('get_nearby');
+    }
     assert.ok(feed.length >= 8, `only ${feed.length} nearby`);
     assert.equal(new Set(feed.map((s) => s.person.id)).size, feed.length);
     assert.ok(!feed.some((s) => s.person.id === me));
@@ -569,5 +575,38 @@ describe('what the outside world can reach', () => {
     assert.deepEqual([s.me.handle, s.me.name, s.me.homeCity, s.needsProfile], ['old.timer', 'Old Timer', 'Vaughan', false]);
     assert.equal((await api.db.query("select auth_id::text as a from app.profiles where handle = 'old.timer'")).rows[0].a, '00000000-0000-4000-8000-0000000000bb');
     assert.equal((await api.db.query("select to_regclass('public.profiles') is null as ok")).rows[0].ok, true);
+  });
+});
+
+describe('moving the residents out (remove-residents.sql)', () => {
+  test('removes every resident and what they made, and leaves real people and the app working', async () => {
+    const { readFileSync } = await import('node:fs');
+    const api = await freshDb();
+    const me = await api.signUp({ handle: 'real.one' });
+    await api.rpc('set_area', QW);
+    await api.rpc('set_sharing', { p_on: true });
+    await api.rpc('set_now_playing', { p_track: track('mine'), p_note: null });
+    await api.rpc('pulse');
+    assert.ok((await api.rpc('get_nearby')).length >= 8);
+    await api.rpc('post_to_city', { p_track: track('mine'), p_note: 'a real post' });
+    await api.as('maren');
+    await api.rpc('sign_guestbook', { p_person: me, p_track: track('gift'), p_why: 'from a resident' });
+
+    await api.db.exec(readFileSync(new URL('../remove-residents.sql', import.meta.url), 'utf8'));
+
+    const count = async (sql) => (await api.db.query(`select count(*)::int as n from ${sql}`)).rows[0].n;
+    assert.equal(await count('app.profiles where seeded'), 0);
+    assert.equal(await count('app.profiles'), 1);
+    for (const t of ['presence', 'tastes', 'openers', 'threads', 'replies']) assert.equal(await count(`app.${t}`), 0, t);
+
+    await api.as(me);
+    await api.clock.advance(60_000);
+    await api.rpc('pulse'); // nobody left to simulate; must not fail or invent anyone
+    assert.deepEqual(await api.rpc('get_nearby'), []);
+    assert.deepEqual((await api.rpc('get_city_feed', { p_scope: 'Toronto' })).posts.map((p) => p.note), ['a real post']);
+    assert.deepEqual((await api.rpc('get_room', { p_person: me })).room.sections.find((s) => s.kind === 'guestbook').entries, []);
+    await api.clock.advance(30 * 60_000);
+    await api.rpc('pulse');
+    assert.deepEqual((await api.rpc('get_inbox')).waiting, [], 'no resident turns up to send a song');
   });
 });

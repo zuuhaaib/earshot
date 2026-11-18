@@ -12,6 +12,7 @@ import { Card, Heading, InkLink, Paper, PinBadge, PosterButton, Stamp, Txt } fro
 import { useSlip } from '@/ui/Slip';
 import { PhoneImportCard } from '@/ui/PhoneImportCard';
 import { LastfmCard } from '@/ui/LastfmCard';
+import { SPOTIFY_ENABLED } from '@/spotify/config';
 import { SpotifyCard } from '@/ui/SpotifyCard';
 import { DashedRule } from '@/ui/SongCard';
 
@@ -115,7 +116,7 @@ export default function YouScreen() {
         </Card>
 
         <Heading style={{ marginTop: 34 }}>what you’re playing</Heading>
-        <SpotifyCard userId={me.id} />
+        {SPOTIFY_ENABLED ? <SpotifyCard userId={me.id} /> : null}
         <LastfmCard userId={me.id} />
 
         <Heading style={{ marginTop: 34 }}>your crate</Heading>
@@ -292,6 +293,7 @@ export default function YouScreen() {
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 22, marginTop: 14 }}>
           <InkLink label="help and contact" onPress={() => router.push('/support')} />
           <InkLink label="privacy" onPress={() => router.push('/privacy')} />
+          <InkLink label="terms" onPress={() => router.push('/terms')} />
         </View>
 
         <Heading style={{ marginTop: 34 }}>the small print</Heading>

@@ -17,6 +17,7 @@ import { NanumPenScript_400Regular } from '@expo-google-fonts/nanum-pen-script';
 import { useCloudSessionSync } from '@/backend/sync';
 import { DataProvider, useApi } from '@/data';
 import { colors } from '@/theme';
+import { PreviewLink } from '@/ui/PreviewLink';
 import { SlipProvider } from '@/ui/Slip';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -77,7 +78,9 @@ export default function RootLayout() {
               <Stack.Screen name="delete-account" options={{ presentation: 'modal' }} />
               <Stack.Screen name="privacy" options={{ presentation: 'modal' }} />
               <Stack.Screen name="support" options={{ presentation: 'modal' }} />
+              <Stack.Screen name="terms" options={{ presentation: 'modal' }} />
             </Stack>
+            <PreviewLink />
           </SlipProvider>
         </DataProvider>
       </SafeAreaProvider>

@@ -3,7 +3,7 @@ import type { MusicSource, Track } from './types';
 import seeded from '@/seed/tracks.json';
 
 export type { MusicSource, Track } from './types';
-export { togglePreview, stopPreview, useIsPlaying } from './player';
+export { togglePreview, stopPreview, useIsPlaying, usePreviewLink } from './player';
 
 /** The music service in use. Replace this one line to plug in another. */
 export const music: MusicSource = itunes;

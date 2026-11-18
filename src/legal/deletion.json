@@ -1,0 +1,33 @@
+{
+  "title": "Delete your account",
+  "intro": "You can delete your earshot account, and everything attached to it, at any time. There are two ways.",
+  "sections": [
+    {
+      "heading": "In the app",
+      "points": [
+        "Open earshot and go to the You tab.",
+        "Under “your account”, tap “delete account”.",
+        "Type your handle to confirm, then tap “delete my account for good”.",
+        "It happens straight away and cannot be undone."
+      ]
+    },
+    {
+      "heading": "Without the app",
+      "points": [
+        "Write to {email} from the email address your account uses, and ask for the account to be deleted. It is deleted within 30 days, usually much sooner, and you get a reply when it is done."
+      ]
+    },
+    {
+      "heading": "What is deleted",
+      "points": [
+        "Your profile, handle and room; your saved songs and listening history; every song you have sent or been sent, and every chat; your city posts, the threads you started with their replies, and your replies elsewhere; your guestbook signatures; your list of blocked people; and your login."
+      ]
+    },
+    {
+      "heading": "What is kept",
+      "points": [
+        "Reports you made about other people are kept with your name removed, and reports made about you are kept, so that safety problems can still be acted on. Nothing else is kept."
+      ]
+    }
+  ]
+}

@@ -61,9 +61,9 @@
       ]
     },
     {
-      "heading": "Children",
+      "heading": "Age",
       "points": [
-        "earshot is not meant for anyone under 13, and should not be used by them. If you believe a child is using it, report the account or write to the support address and it will be removed."
+        "earshot is for adults. You must be {age} or older to make an account, and you are asked to confirm that when you sign up. If you believe someone younger is using it, report the account or write to {email} and it will be removed."
       ]
     },
     {

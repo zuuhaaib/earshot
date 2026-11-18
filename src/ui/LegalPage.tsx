@@ -8,7 +8,7 @@ import { BackLink } from './Field';
 import { Heading, InkLink, Paper, PosterButton, Txt } from './print';
 import { useSlip } from './Slip';
 
-export function LegalPageView({ page, other }: { page: LegalPage; other: { label: string; href: '/privacy' | '/support' } }) {
+export function LegalPageView({ page, other }: { page: LegalPage; other: { label: string; href: '/privacy' | '/support' | '/terms' } }) {
   const insets = useSafeAreaInsets();
   const slip = useSlip();
 

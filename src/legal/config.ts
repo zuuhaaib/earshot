@@ -10,5 +10,12 @@ export const SUPPORT_EMAIL_SHOWN = SUPPORT_EMAIL || 'the support address (not se
 
 export type LegalPage = { title: string; updated?: string; intro: string; sections: { heading: string; points: string[] }[] };
 
-/** Put the support address into a page's text. */
-export const withEmail = (text: string) => text.split('{email}').join(SUPPORT_EMAIL_SHOWN);
+/**
+ * The youngest anyone may be to make an account. earshot puts strangers who are
+ * near each other in touch, so it is for adults. The terms, the privacy page and
+ * the sign-up tick all read this one number; scripts/make-legal-pages.mjs has its own copy.
+ */
+export const MIN_AGE = 18;
+
+/** Put the support address and the minimum age into a page's text. */
+export const withEmail = (text: string) => text.split('{email}').join(SUPPORT_EMAIL_SHOWN).split('{age}').join(String(MIN_AGE));

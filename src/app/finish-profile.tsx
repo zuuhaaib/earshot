@@ -15,6 +15,7 @@ import type { CloudApi } from '@/data/cloud/CloudApi';
 import { colors } from '@/theme';
 import { Field } from '@/ui/Field';
 import { authWords } from '@/ui/LoginForm';
+import { Agree } from '@/ui/Agree';
 import { Heading, InkLink, Paper, PinBadge, PosterButton, Stamp, Txt } from '@/ui/print';
 
 const BADGE_COLORS = ['#F7A6BF', '#FFD23F', '#7FCFA9', '#F6B26B', '#F0502F', '#B9A7E8', '#8FD3E8', '#C6E377', '#FFF6EC'];
@@ -31,6 +32,7 @@ export default function FinishProfile() {
   const [color, setColor] = useState(BADGE_COLORS[0]);
   const [city, setCity] = useState<string>(cities[0]);
   const [busy, setBusy] = useState(false);
+  const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!session) return <Paper />;
@@ -159,7 +161,8 @@ export default function FinishProfile() {
               {error}
             </Txt>
           ) : null}
-          <PosterButton label={busy ? 'pressing your badge…' : 'that’s me. let’s go'} disabled={busy} onPress={save} style={{ marginTop: 22 }} />
+          <Agree value={agreed} onChange={setAgreed} />
+          <PosterButton label={busy ? 'pressing your badge…' : 'that’s me. let’s go'} disabled={busy || !agreed} onPress={save} style={{ marginTop: 22 }} />
           <InkLink
             label="not you? log out"
             onPress={() =>

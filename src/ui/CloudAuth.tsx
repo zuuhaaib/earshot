@@ -27,6 +27,7 @@ import {
   type CloudProfile,
   type NewCloudAccount,
 } from '@/backend/accounts';
+import { Agree } from './Agree';
 import { Field } from './Field';
 import { Card, Heading, InkLink, PosterButton, Txt } from './print';
 
@@ -293,6 +294,7 @@ export function CloudSignUp({
 }) {
   const api = useApi();
   const [stage, setStage] = useState<'details' | 'code'>('details');
+  const [agreed, setAgreed] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [again, setAgain] = useState('');
@@ -396,7 +398,8 @@ export function CloudSignUp({
         </Txt>
       </Card>
 
-      <PosterButton label={busy ? 'sending your code…' : 'email me a code'} disabled={busy} onPress={start} style={{ marginTop: 20 }} />
+      <Agree value={agreed} onChange={setAgreed} />
+      <PosterButton label={busy ? 'sending your code…' : 'email me a code'} disabled={busy || !agreed} onPress={start} style={{ marginTop: 20 }} />
     </View>
   );
 }

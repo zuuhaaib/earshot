@@ -19,8 +19,9 @@ if (!email && existsSync(join(root, '.env'))) {
 }
 if (!email) console.warn('No EXPO_PUBLIC_SUPPORT_EMAIL set: the pages will say so where the address belongs.');
 
+const MIN_AGE = 18; // keep in step with MIN_AGE in src/legal/config.ts
 const esc = (s) => s.split('&').join('&amp;').split('<').join('&lt;').split('>').join('&gt;');
-const fill = (s) => esc(s).split('{email}').join(email ? `<a href="mailto:${esc(email)}">${esc(email)}</a>` : 'the support address (not set up yet)');
+const fill = (s) => esc(s).split('{age}').join(String(MIN_AGE)).split('{email}').join(email ? `<a href="mailto:${esc(email)}">${esc(email)}</a>` : 'the support address (not set up yet)');
 
 function page(doc, other) {
   const sections = doc.sections
@@ -58,6 +59,8 @@ ${sections}
 }
 
 mkdirSync(join(root, 'site'), { recursive: true });
-writeFileSync(join(root, 'site', 'privacy.html'), page(read('src/legal/privacy.json'), { href: 'support.html', label: 'Help and contact' }));
+writeFileSync(join(root, 'site', 'privacy.html'), page(read('src/legal/privacy.json'), { href: 'terms.html', label: 'Terms' }));
+writeFileSync(join(root, 'site', 'terms.html'), page(read('src/legal/terms.json'), { href: 'privacy.html', label: 'Privacy' }));
+writeFileSync(join(root, 'site', 'delete-account.html'), page(read('src/legal/deletion.json'), { href: 'privacy.html', label: 'Privacy' }));
 writeFileSync(join(root, 'site', 'support.html'), page(read('src/legal/support.json'), { href: 'privacy.html', label: 'Privacy' }));
-console.log('Wrote site/privacy.html and site/support.html');
+console.log('Wrote site/privacy.html, support.html, terms.html and delete-account.html');
