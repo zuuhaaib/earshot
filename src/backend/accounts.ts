@@ -376,13 +376,10 @@ export const googleRedirectIsNumeric = () => {
  */
 export async function signInWithGoogle(): Promise<CloudProfile> {
   const redirectTo = googleRedirect();
-  console.log('Google redirectTo:', redirectTo);
   const { data } = await attempt(
     async () => await supabase().auth.signInWithOAuth({ provider: 'google', options: { redirectTo, skipBrowserRedirect: true } }),
   );
   if (!data.url) throw new CloudError('google-off');
-  console.log('OAuth host:', new URL(data.url).hostname);
-  console.log('OAuth redirect sent:', new URL(data.url).searchParams.get('redirect_to'));
 
   const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
   if (result.type !== 'success') throw new CloudError('cancelled');
