@@ -2,7 +2,7 @@
 // public: the app stores ask for a privacy link and a support link that open in
 // a browser. The words come from the same files the app shows (src/legal).
 //
-//   npm run legal            -> site/privacy.html, site/support.html
+//   npm run legal            -> docs/ (GitHub Pages serves that folder at earshot.lol)
 //
 // The support address is read from EXPO_PUBLIC_SUPPORT_EMAIL in .env.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -23,7 +23,7 @@ const MIN_AGE = 18; // keep in step with MIN_AGE in src/legal/config.ts
 const esc = (s) => s.split('&').join('&amp;').split('<').join('&lt;').split('>').join('&gt;');
 const fill = (s) => esc(s).split('{age}').join(String(MIN_AGE)).split('{email}').join(email ? `<a href="mailto:${esc(email)}">${esc(email)}</a>` : 'the support address (not set up yet)');
 
-function page(doc, other) {
+function page(doc, links) {
   const sections = doc.sections
     .map((s) => `<h2>${esc(s.heading)}</h2>\n${s.points.map((p) => `<p>${fill(p)}</p>`).join('\n')}`)
     .join('\n');
@@ -51,16 +51,35 @@ function page(doc, other) {
 ${doc.updated ? `<p class="meta">Last updated ${esc(doc.updated)}</p>` : ''}
 <p>${fill(doc.intro)}</p>
 ${sections}
-<p class="meta" style="margin-top:40px"><a href="${other.href}">${esc(other.label)}</a></p>
+<p class="meta" style="margin-top:40px">${links.map((l) => `<a href="${l.href}">${esc(l.label)}</a>`).join(' · ')}</p>
 </main>
 </body>
 </html>
 `;
 }
 
-mkdirSync(join(root, 'site'), { recursive: true });
-writeFileSync(join(root, 'site', 'privacy.html'), page(read('src/legal/privacy.json'), { href: 'terms.html', label: 'Terms' }));
-writeFileSync(join(root, 'site', 'terms.html'), page(read('src/legal/terms.json'), { href: 'privacy.html', label: 'Privacy' }));
-writeFileSync(join(root, 'site', 'delete-account.html'), page(read('src/legal/deletion.json'), { href: 'privacy.html', label: 'Privacy' }));
-writeFileSync(join(root, 'site', 'support.html'), page(read('src/legal/support.json'), { href: 'privacy.html', label: 'Privacy' }));
-console.log('Wrote site/privacy.html, support.html, terms.html and delete-account.html');
+const out = join(root, 'docs');
+const home = { href: '/', label: 'earshot' };
+const PAGES = [
+  ['privacy', 'src/legal/privacy.json', 'Privacy'],
+  ['terms', 'src/legal/terms.json', 'Terms'],
+  ['support', 'src/legal/support.json', 'Help and contact'],
+  ['delete-account', 'src/legal/deletion.json', 'Delete your account'],
+];
+const all = PAGES.map(([slug, , label]) => ({ href: `/${slug}`, label }));
+
+mkdirSync(out, { recursive: true });
+for (const [slug, file] of PAGES) writeFileSync(join(out, `${slug}.html`), page(read(file), [home, ...all.filter((l) => l.href !== `/${slug}`)]));
+writeFileSync(
+  join(out, 'index.html'),
+  page(
+    {
+      title: 'Find out what everyone around you has on.',
+      intro: 'earshot is a social music app. Open it anywhere and see what the people nearby are playing, then say hello by sending them a song. It shows that someone is nearby, never where they are.',
+      sections: [{ heading: 'Coming soon', points: ['To iPhone and Android. Questions in the meantime go to {email}.'] }],
+    },
+    all,
+  ),
+);
+writeFileSync(join(out, 'CNAME'), 'earshot.lol'); // tells GitHub Pages which domain these pages belong to
+console.log('Wrote docs/: index, privacy, terms, support, delete-account, CNAME');

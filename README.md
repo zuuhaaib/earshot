@@ -126,7 +126,7 @@ iPhone builds need an Apple Developer membership. The stores also want public li
 npm run legal
 ```
 
-This writes both into `site/`, ready to host anywhere.
+This writes them into `docs/`, which GitHub Pages serves at earshot.lol: the home page, plus `/privacy`, `/terms`, `/support` and `/delete-account`.
 
 ## The look
 
