@@ -18,6 +18,10 @@ const set = (next: Partial<State>) => {
 };
 
 let player: AudioPlayer | null = null;
+// When the listener was last overruled by a tap. Right after play or pause the player still sends
+// one or two updates from before it, which would flick the state back and forth.
+let tappedAt = 0;
+const SETTLE_MS = 700;
 
 function getPlayer(): AudioPlayer {
   if (player) return player;
@@ -26,12 +30,13 @@ function getPlayer(): AudioPlayer {
   setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
   player.addListener('playbackStatusUpdate', (status) => {
     if (status.didJustFinish) set({ trackId: null, playing: false, link: null });
-    else if (state.trackId && status.isLoaded && status.playing !== state.playing) set({ playing: status.playing });
+    else if (state.trackId && status.isLoaded && status.playing !== state.playing && Date.now() - tappedAt > SETTLE_MS) set({ playing: status.playing });
   });
   return player;
 }
 
 export function togglePreview(track: Pick<Track, 'id' | 'previewUrl'> & Partial<Pick<Track, 'sourceId' | 'title'>>) {
+  tappedAt = Date.now();
   if (!track.previewUrl) {
     set({ failed: track.id });
     return;
@@ -80,11 +85,11 @@ export function useIsPlaying(trackId: string): boolean {
   );
 }
 
-/** The song whose preview is loaded right now, for the "hear all of it" link. Null when nothing is. */
+/** The song whose preview is playing right now, for the "hear all of it" link. Null when nothing is, or it's paused. */
 export function usePreviewLink(): PreviewLink | null {
   return useSyncExternalStore(
     subscribe,
-    () => state.link,
+    () => (state.playing ? state.link : null),
     () => null,
   );
 }

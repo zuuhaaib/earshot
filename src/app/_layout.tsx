@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
@@ -16,6 +16,7 @@ import { CourierPrime_400Regular, CourierPrime_700Bold } from '@expo-google-font
 import { NanumPenScript_400Regular } from '@expo-google-fonts/nanum-pen-script';
 import { useCloudSessionSync } from '@/backend/sync';
 import { DataProvider, useApi } from '@/data';
+import { stopPreview } from '@/music';
 import { colors } from '@/theme';
 import { PreviewLink } from '@/ui/PreviewLink';
 import { SlipProvider } from '@/ui/Slip';
@@ -29,6 +30,10 @@ function CloudSession() {
 }
 
 export default function RootLayout() {
+  // A preview belongs to the screen it was started on. Tabs stay alive in the background, so stop on any move.
+  const pathname = usePathname();
+  useEffect(() => stopPreview(), [pathname]);
+
   const [loaded, error] = useFonts({
     BowlbyOne_400Regular,
     Besley_500Medium,
