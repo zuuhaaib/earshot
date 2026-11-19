@@ -3,7 +3,7 @@
  * the top of the conversation for as long as the conversation exists.
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import { FlatList, KeyboardAvoidingView, Pressable, TextInput, View } from 'react-native';
+import { Alert, FlatList, KeyboardAvoidingView, Pressable, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -54,9 +54,23 @@ function Pinned({ chat, meId }: { chat: Chat; meId: string }) {
 }
 
 const Bubble = React.memo(function Bubble({ message, mine, otherId }: { message: ChatMessage; mine: boolean; otherId: string }) {
+  const report = () => router.push({ pathname: '/safety/[id]', params: { id: otherId, kind: 'message', cid: message.id } });
+  // Hold their message for the options. Your own messages have none.
+  const options = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    Alert.alert('This message', undefined, [
+      { text: 'Report message', style: 'destructive', onPress: report },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
   return (
     <View style={{ alignItems: mine ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
-      <View
+      <Pressable
+        onLongPress={mine ? undefined : options}
+        disabled={mine}
+        // screen readers can't hold, so the same option is offered as an action
+        accessibilityActions={mine ? undefined : [{ name: 'report', label: 'Report this message' }]}
+        onAccessibilityAction={(e) => e.nativeEvent.actionName === 'report' && report()}
         style={{
           maxWidth: '84%',
           backgroundColor: mine ? colors.highlighter : colors.card,
@@ -82,24 +96,10 @@ const Bubble = React.memo(function Bubble({ message, mine, otherId }: { message:
           </View>
         ) : null}
         {message.body ? <Txt variant="body">{message.body}</Txt> : null}
-      </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 3 }}>
-        <Txt variant="meta" tone="faint" style={{ fontSize: 10, lineHeight: 13 }}>
-          {clock(message.sentAt)}
-        </Txt>
-        {mine ? null : (
-          <Pressable
-            onPress={() => router.push({ pathname: '/safety/[id]', params: { id: otherId, kind: 'message', cid: message.id } })}
-            accessibilityRole="link"
-            accessibilityLabel="Report this message"
-            hitSlop={12}
-          >
-            <Txt variant="meta" tone="faint" style={{ fontSize: 10, lineHeight: 13, textDecorationLine: 'underline' }}>
-              report
-            </Txt>
-          </Pressable>
-        )}
-      </View>
+      </Pressable>
+      <Txt variant="meta" tone="faint" style={{ marginTop: 3, fontSize: 10, lineHeight: 13 }}>
+        {clock(message.sentAt)}
+      </Txt>
     </View>
   );
 });
@@ -245,7 +245,7 @@ export default function ChatScreen() {
               </View>
               <Txt variant="small" tone="soft" style={{ marginTop: 10 }}>
                 Deleting clears this chat from your side only. {first} keeps their copy, isn’t told, and isn’t blocked: if either of you
-                writes again, it starts fresh.
+                writes again, it starts fresh. To report a single message, press and hold it.
               </Txt>
             </View>
           ) : null}
