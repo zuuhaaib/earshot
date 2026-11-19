@@ -252,6 +252,13 @@ export default function ChatScreen() {
 
           <Pinned chat={chat} meId={meId} />
 
+          {newestFirst.length === 0 ? (
+            <View style={{ flex: 1, justifyContent: 'flex-end', paddingVertical: 24, paddingHorizontal: 28 }}>
+              <Txt variant="hand" tone="soft" center style={{ fontSize: 24, lineHeight: 26 }}>
+                you both said yes to a song. that’s further than most conversations get. say something to {first.toLowerCase()}.
+              </Txt>
+            </View>
+          ) : (
           <FlatList
             data={newestFirst}
             inverted
@@ -261,15 +268,8 @@ export default function ChatScreen() {
             keyboardDismissMode="interactive"
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, flexGrow: 1 }}
-            ListEmptyComponent={
-              // inverted lists draw this upside down unless it's flipped back
-              <View style={{ transform: [{ scaleY: -1 }], paddingVertical: 24, paddingHorizontal: 12 }}>
-                <Txt variant="hand" tone="soft" center style={{ fontSize: 24, lineHeight: 26 }}>
-                  you both said yes to a song. that’s further than most conversations get. say something to {first.toLowerCase()}.
-                </Txt>
-              </View>
-            }
           />
+          )}
 
           {/* composer */}
           <View
