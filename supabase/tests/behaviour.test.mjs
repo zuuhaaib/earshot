@@ -520,6 +520,17 @@ describe('accounts', () => {
     s = await api.rpc('complete_profile', { p_name: 'Tess G', p_handle: 'Tess.G', p_badge: 'tg', p_badge_color: '#B9A7E8', p_home_city: 'Vaughan' });
     assert.equal(s.needsProfile, false);
     assert.deepEqual([s.me.name, s.me.handle, s.me.badge, s.me.homeCity], ['Tess G', 'tess.g', 'TG', 'Vaughan']);
+
+    // finishing is a one-time step: a finished profile can't use it to change handle later
+    assert.equal(await api.fails('complete_profile', { p_name: 'Tess G', p_handle: 'someone.else', p_badge: 'TG', p_badge_color: '#B9A7E8', p_home_city: 'Vaughan' }), 'already-finished');
+    assert.equal((await api.rpc('get_session')).me.handle, 'tess.g');
+  });
+
+  test('an account made with a handle can never use the finish step to change it', async () => {
+    const api = await freshDb({ seed: false });
+    await api.signUp({ handle: 'original.name' });
+    assert.equal(await api.fails('complete_profile', { p_name: 'Same', p_handle: 'brand.new', p_badge: 'SP', p_badge_color: '#ffffff', p_home_city: 'Toronto' }), 'already-finished');
+    assert.equal((await api.rpc('get_session')).me.handle, 'original.name');
   });
 
   test('two people who sign in with the same email name still get different handles', async () => {

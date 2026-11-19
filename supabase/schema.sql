@@ -531,6 +531,8 @@ language plpgsql security definer set search_path = '' as $$
 declare v text := app.need_me(); h text := lower(trim(p_handle));
 begin
   if coalesce(trim(p_name), '') = '' then raise exception 'bad-name'; end if;
+  -- once only: a finished profile keeps its handle for good
+  if exists (select 1 from app.profiles where id = v and onboarded) then raise exception 'already-finished'; end if;
   if h !~ '^[a-z0-9._]{2,28}$' then raise exception 'bad-handle'; end if;
   if exists (select 1 from app.profiles where lower(handle) = h and id <> v) then raise exception 'handle-taken'; end if;
   update app.profiles set

@@ -86,7 +86,8 @@ function supabase(): SupabaseClient {
   if (!cloudConfigured()) throw new CloudError('not-configured');
   if (client) return client;
   client = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-    auth: { storage: localStorage, autoRefreshToken: true, persistSession: true, detectSessionInUrl: false },
+    // pkce: Google sign-in comes back with a one-time code instead of the login (see signInWithGoogle)
+    auth: { storage: localStorage, autoRefreshToken: true, persistSession: true, detectSessionInUrl: false, flowType: 'pkce' },
   });
   // Keep the session fresh while the app is in front, and stop when it isn't.
   AppState.addEventListener('change', (state) => {
@@ -399,8 +400,12 @@ export async function signInWithGoogle(): Promise<CloudProfile> {
     const detail = `${params.error_code ?? params.error} ${params.error_description ?? ''}`;
     throw new CloudError(/provider is not enabled|unsupported provider/i.test(detail) ? 'google-off' : 'network', detail);
   }
-  if (!params.access_token || !params.refresh_token) throw new CloudError('cancelled');
-  const session = await attempt(async () => await supabase().auth.setSession({ access_token: params.access_token, refresh_token: params.refresh_token }));
+  // The return link carries a one-time code, not the login itself. Only this app, holding the secret it
+  // made when the sign-in started, can swap it for a session, so a link from anywhere else is useless.
+  if (!params.code) throw new CloudError('cancelled');
+  const session = await attempt(
+    async () => await supabase().auth.exchangeCodeForSession(params.code, params.sb_flow_id ? { flowId: params.sb_flow_id } : undefined),
+  );
   const user = session.data.user;
   if (!user) throw new CloudError('network', 'no user after Google sign-in');
   return profileFor(user.id, user.email ?? '');
