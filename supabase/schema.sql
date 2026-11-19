@@ -98,6 +98,21 @@ create table if not exists app.plays (
 );
 create index if not exists plays_by_area on app.plays (area_id, started_at);
 create index if not exists plays_by_user on app.plays (user_id, started_at);
+-- Whether you were on air when you put it on. Rooms only show those, so going off air keeps your listening yours.
+do $$
+begin
+  if not exists (select 1 from information_schema.columns where table_schema = 'app' and table_name = 'plays' and column_name = 'on_air') then
+    alter table app.plays add column on_air boolean not null default false;
+    update app.plays set on_air = area_id is not null; -- the best record there is of plays from before this column
+  end if;
+end $$;
+
+-- When people last changed area, so nobody can hop through every neighbourhood to find someone.
+create table if not exists app.area_moves (
+  user_id text not null references app.profiles (id) on delete cascade,
+  moved_at bigint not null
+);
+create index if not exists area_moves_by_user on app.area_moves (user_id, moved_at);
 
 create table if not exists app.saves (
   user_id text not null references app.profiles (id) on delete cascade,
@@ -129,6 +144,7 @@ create table if not exists app.messages (
   created_at bigint not null
 );
 create index if not exists messages_by_chat on app.messages (request_id, created_at);
+create index if not exists messages_by_sender on app.messages (from_id, created_at);
 
 create table if not exists app.chat_reads (
   request_id bigint not null references app.requests (id) on delete cascade,
@@ -182,6 +198,7 @@ create table if not exists app.posts (
   seeded boolean not null default false
 );
 create index if not exists posts_by_city on app.posts (city, created_at);
+create index if not exists posts_by_user on app.posts (user_id, created_at);
 
 create table if not exists app.threads (
   id bigint generated always as identity primary key,
@@ -206,6 +223,7 @@ create table if not exists app.replies (
   seeded boolean not null default false
 );
 create index if not exists replies_by_thread on app.replies (thread_id, created_at);
+create index if not exists replies_by_user on app.replies (user_id, created_at);
 
 -- The simulated neighbourhood: which residents are "around" which area and
 -- until when, what they listen to, and what they send to people they notice.
@@ -259,7 +277,7 @@ create table if not exists app.reports (
 do $$
 declare t text;
 begin
-  foreach t in array array['profiles','tracks','plays','saves','requests','messages','chat_reads','rooms','posts','threads','replies','presence','tastes','openers','sim_state','blocks','reports','chat_hides','push_tokens','song_matches']
+  foreach t in array array['profiles','tracks','plays','saves','requests','messages','chat_reads','rooms','posts','threads','replies','presence','tastes','openers','sim_state','blocks','reports','chat_hides','push_tokens','song_matches','area_moves']
   loop
     execute format('alter table app.%I enable row level security', t);
   end loop;
@@ -338,6 +356,20 @@ $$;
 
 -- Remember a track the app has sent. The first copy wins, so nobody can
 -- overwrite the details of a song everyone else is already using.
+--
+-- The app sends a song's details, so they can't be trusted: artwork and previews
+-- must come from the services earshot actually uses, over https. Otherwise anyone
+-- could store a real song with their own picture or audio for everyone to load.
+-- shortcut: titles and artists are still taken on trust from whoever sends a song first; checking them against Apple's catalogue would need the server to look each one up
+create or replace function app.trusted_artwork(u text) returns boolean
+language sql immutable set search_path = '' as $$
+  select u ~ '^https://[a-z0-9.-]+\.mzstatic\.com/' or u ~ '^https://lastfm\.freetls\.fastly\.net/' or u ~ '^https://i\.scdn\.co/'
+$$;
+create or replace function app.trusted_preview(u text) returns boolean
+language sql immutable set search_path = '' as $$
+  select u is null or u ~ '^https://[a-z0-9.-]+\.itunes\.apple\.com/' or u ~ '^https://[a-z0-9.-]+\.mzstatic\.com/'
+$$;
+
 create or replace function app.put_track(j jsonb) returns text
 language plpgsql set search_path = '' as $$
 declare tid text := j ->> 'id';
@@ -345,11 +377,14 @@ begin
   if tid is null or coalesce(j ->> 'title', '') = '' or coalesce(j ->> 'artist', '') = '' or coalesce(j ->> 'artworkUrl', '') = '' then
     raise exception 'bad-track';
   end if;
+  if not app.trusted_artwork(j ->> 'artworkUrl') or not app.trusted_preview(nullif(j ->> 'previewUrl', '')) then
+    raise exception 'bad-track';
+  end if;
   insert into app.tracks (id, source_id, title, artist, album, year, genre, artwork_url, preview_url)
   values (
     left(tid, 120), left(coalesce(j ->> 'sourceId', tid), 120), left(j ->> 'title', 300), left(j ->> 'artist', 300),
     left(coalesce(j ->> 'album', ''), 300), nullif(j ->> 'year', '')::integer, left(coalesce(j ->> 'genre', ''), 80),
-    left(j ->> 'artworkUrl', 600), left(j ->> 'previewUrl', 600))
+    left(j ->> 'artworkUrl', 600), left(nullif(j ->> 'previewUrl', ''), 600))
   on conflict (id) do nothing;
   return left(tid, 120);
 end $$;
@@ -433,6 +468,10 @@ begin
   return candidate;
 end $$;
 
+-- A badge colour is six hex digits after a #, nothing else: other people's phones draw it.
+create or replace function app.is_colour(c text) returns boolean
+language sql immutable set search_path = '' as $$ select coalesce(c ~ '^#[0-9A-Fa-f]{6}$', false) $$;
+
 -- When someone signs up (by email or with Google), make their profile.
 -- Email sign-ups send a handle and badge with them. Google sign-ups don't, so
 -- they get a placeholder and are asked to finish their profile in the app.
@@ -450,8 +489,9 @@ begin
     case when wanted is not null then wanted else app.free_handle(split_part(coalesce(new.email, 'listener'), '@', 1)) end,
     left(display, 40),
     coalesce(nullif(upper(left(meta ->> 'badge', 2)), ''), upper(left(display, 2)), '?'),
-    coalesce(nullif(meta ->> 'badge_color', ''), '#F7A6BF'),
-    coalesce(nullif(meta ->> 'home_city', ''), 'Toronto'),
+    -- sign-up details come straight from the person signing up, so they get the same checks as editing does
+    case when app.is_colour(meta ->> 'badge_color') then meta ->> 'badge_color' else '#F7A6BF' end,
+    case when meta ->> 'home_city' = any(app.scope_cities('GTA')) then meta ->> 'home_city' else 'Toronto' end,
     wanted is not null
   );
   return new;
@@ -496,7 +536,7 @@ begin
   update app.profiles set
     name = left(trim(p_name), 40), handle = h,
     badge = coalesce(nullif(upper(left(trim(p_badge), 2)), ''), '?'),
-    badge_color = left(p_badge_color, 16),
+    badge_color = case when app.is_colour(p_badge_color) then p_badge_color else badge_color end,
     home_city = case when p_home_city = any(app.scope_cities('GTA')) then p_home_city else home_city end,
     onboarded = true
   where id = v;
@@ -510,7 +550,8 @@ begin
   if coalesce(trim(p_name), '') = '' then raise exception 'bad-name'; end if;
   update app.profiles set
     name = left(trim(p_name), 40), tagline = left(trim(coalesce(p_tagline, '')), 80), bio = left(trim(coalesce(p_bio, '')), 240),
-    badge = coalesce(nullif(upper(left(trim(p_badge), 2)), ''), '?'), badge_color = left(p_badge_color, 16)
+    badge = coalesce(nullif(upper(left(trim(p_badge), 2)), ''), '?'),
+    badge_color = case when app.is_colour(p_badge_color) then p_badge_color else badge_color end
   where id = v;
 end $$;
 
@@ -546,9 +587,19 @@ end $$;
 
 create or replace function public.set_area(p_area text, p_source text) returns void
 language plpgsql security definer set search_path = '' as $$
-declare v text := app.need_me(); s boolean;
+declare v text := app.need_me(); s boolean; current_area text; t bigint := app.now_ms();
 begin
   if p_source not in ('gps', 'picked') or coalesce(p_area, '') = '' or length(p_area) > 64 then raise exception 'bad-area'; end if;
+  -- Moving is fine; hopping through every neighbourhood to see who's where is not. This applies to
+  -- location moves too, because the app says which kind it is and a direct caller could lie.
+  select area_id into current_area from app.profiles where id = v;
+  if current_area is not null and current_area is distinct from p_area then
+    if exists (select 1 from app.area_moves where user_id = v and moved_at > t - 300000)
+       or (select count(*) from app.area_moves where user_id = v and moved_at > t - 86400000) >= 12 then
+      raise exception 'moving-too-fast';
+    end if;
+    insert into app.area_moves (user_id, moved_at) values (v, t);
+  end if;
   update app.profiles set area_id = p_area, area_source = p_source where id = v returning sharing into s;
   -- What you've got on moves with you, if you're sharing.
   if s then update app.plays set area_id = p_area where user_id = v and ended_at is null; end if;
@@ -562,8 +613,8 @@ begin
   if p_track is null or jsonb_typeof(p_track) = 'null' then return; end if;
   tid := app.put_track(p_track);
   select * into p from app.profiles where id = v;
-  insert into app.plays (user_id, track_id, kind, note, area_id, started_at)
-  values (v, tid, case when note is null then 'play' else 'share' end, left(note, 280), case when p.sharing then p.area_id end, at);
+  insert into app.plays (user_id, track_id, kind, note, area_id, started_at, on_air)
+  values (v, tid, case when note is null then 'play' else 'share' end, left(note, 280), case when p.sharing then p.area_id end, at, p.sharing and p.area_id is not null);
 end $$;
 
 create or replace function public.get_nearby() returns jsonb
@@ -610,7 +661,7 @@ begin
     where user_id = uid and kind = 'play' and (not_track is null or track_id <> not_track)
     order by random() limit 1;
   if tid is null then return; end if;
-  insert into app.plays (user_id, track_id, kind, note, area_id, started_at, ended_at) values (uid, tid, 'play', null, area, started, ended);
+  insert into app.plays (user_id, track_id, kind, note, area_id, started_at, ended_at, on_air) values (uid, tid, 'play', null, area, started, ended, true);
 end $$;
 
 create or replace function app.sim_share(uid text, area text, at bigint) returns boolean
@@ -623,7 +674,7 @@ begin
       and not exists (select 1 from app.plays p where p.user_id = uid and p.kind = 'share' and p.track_id = t.track_id and p.started_at > at - 43200000)
     order by random() limit 1;
   if not found then return false; end if;
-  insert into app.plays (user_id, track_id, kind, note, area_id, started_at, ended_at) values (uid, s.track_id, 'share', s.note, area, at, at);
+  insert into app.plays (user_id, track_id, kind, note, area_id, started_at, ended_at, on_air) values (uid, s.track_id, 'share', s.note, area, at, at, true);
   return true;
 end $$;
 
@@ -769,6 +820,7 @@ begin
       on conflict (request_id, user_id) do update set read_at = excluded.read_at;
     return jsonb_build_object('kind', 'chat', 'id', rid::text);
   end if;
+  if (select count(*) from app.requests where from_id = v and created_at > at - 86400000) >= 30 then raise exception 'too-many'; end if;
   rid := app.insert_request(v, p_to, tid, left(note, 280), at);
   return jsonb_build_object('kind', 'request', 'id', rid::text);
 end $$;
@@ -856,6 +908,11 @@ language plpgsql security definer set search_path = '' as $$
 declare v text := app.need_me(); at bigint := app.now_ms(); body text := trim(coalesce(p_body, ''));
 begin
   if body = '' then return; end if;
+  -- no limit a person would notice: only a bot sends thirty a minute or three thousand a day
+  if (select count(*) from app.messages where from_id = v and created_at > at - 60000) >= 30
+     or (select count(*) from app.messages where from_id = v and created_at > at - 86400000) >= 3000 then
+    raise exception 'too-many';
+  end if;
   if p_chat !~ '^\d+$' or not exists (
     select 1 from app.requests where id = p_chat::bigint and status = 'accepted' and (from_id = v or to_id = v)) then
     raise exception 'not-your-chat';
@@ -944,9 +1001,9 @@ begin
     insert into app.rooms (user_id, doc, updated_at) values (p_person, doc, app.now_ms()) on conflict (user_id) do nothing;
   end if;
 
-  -- "recently played" is whatever they've really had on, unless they keep it hidden
+  -- "recently played" is what they really had on while on air, unless they keep it hidden
   select coalesce(jsonb_agg(x.track_id order by x.latest desc), '[]'::jsonb) into recent
-    from (select pl.track_id, max(pl.started_at) as latest from app.plays pl where pl.user_id = p_person group by pl.track_id order by latest desc limit 6) x;
+    from (select pl.track_id, max(pl.started_at) as latest from app.plays pl where pl.user_id = p_person and pl.on_air group by pl.track_id order by latest desc limit 6) x;
 
   for s in select value from jsonb_array_elements(doc -> 'sections') loop
     if s ->> 'kind' = 'recent' then
@@ -1085,6 +1142,7 @@ language plpgsql security definer set search_path = '' as $$
 declare v text := app.need_me(); note text := trim(coalesce(p_note, '')); tid text; pid bigint;
 begin
   if note = '' then raise exception 'say-why'; end if;
+  if (select count(*) from app.posts where user_id = v and created_at > app.now_ms() - 86400000) >= 10 then raise exception 'too-many'; end if;
   tid := app.put_track(p_track);
   insert into app.posts (user_id, track_id, note, city, created_at)
   values (v, tid, left(note, 280), (select home_city from app.profiles where id = v), app.now_ms()) returning id into pid;
@@ -1171,6 +1229,7 @@ language plpgsql security definer set search_path = '' as $$
 declare v text := app.need_me(); title text := trim(coalesce(p_title, '')); name text := trim(coalesce(p_artist, '')); tid bigint;
 begin
   if title = '' or name = '' then raise exception 'needs-title'; end if;
+  if (select count(*) from app.threads where user_id = v and created_at > app.now_ms() - 86400000) >= 5 then raise exception 'too-many'; end if;
   insert into app.threads (artist_key, artist, city, user_id, title, body, created_at)
   values (lower(name), left(name, 200), (select home_city from app.profiles where id = v), v, left(title, 120), left(trim(coalesce(p_body, '')), 600), app.now_ms())
   returning id into tid;
@@ -1182,6 +1241,7 @@ language plpgsql security definer set search_path = '' as $$
 declare v text := app.need_me(); body text := trim(coalesce(p_body, '')); tid text;
 begin
   if body = '' and (p_track is null or jsonb_typeof(p_track) = 'null') then return; end if;
+  if (select count(*) from app.replies where user_id = v and created_at > app.now_ms() - 86400000) >= 60 then raise exception 'too-many'; end if;
   if p_thread !~ '^\d+$' or not exists (select 1 from app.threads where id = p_thread::bigint) then raise exception 'thread-gone'; end if;
   if p_track is not null and jsonb_typeof(p_track) <> 'null' then tid := app.put_track(p_track); end if;
   insert into app.replies (thread_id, user_id, body, track_id, created_at) values (p_thread::bigint, v, left(body, 1000), tid, app.now_ms());
@@ -1547,6 +1607,11 @@ begin
   select * into q from app.requests where id = new.request_id;
   other := case when new.from_id = q.from_id then q.to_id else q.from_id end;
   if app.i_blocked(other, new.from_id) then return null; end if; -- blocked people's messages are never shown, so never announced
+  -- a burst of messages buzzes the other phone once, not once per message
+  if exists (select 1 from app.messages m where m.request_id = new.request_id and m.from_id = new.from_id and m.id <> new.id
+             and m.created_at > new.created_at - 60000 and m.created_at <= new.created_at) then
+    return null;
+  end if;
   select name into sender from app.profiles where id = new.from_id;
   perform app.push(other, coalesce(sender, 'Someone'), case when new.track_id is null then 'Sent you a message.' else 'Sent you a song.' end, '/chat/' || new.request_id);
   return null;

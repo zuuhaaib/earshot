@@ -8,6 +8,7 @@ import { KeyboardAvoidingView, ScrollView, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApi, useLive, useSession } from '@/data';
+import { hitLimit } from '@/data/api';
 import { seedTrack, stopPreview, type Track } from '@/music';
 import { BackLink, Field, goBack } from '@/ui/Field';
 import { Card, Heading, Paper, PosterButton, Txt } from '@/ui/print';
@@ -47,8 +48,8 @@ export default function PostToCity() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       slip(`Pinned to ${home}’s board.`);
       goBack();
-    } catch {
-      slip('That didn’t post. Nothing’s lost; try again.');
+    } catch (e) {
+      slip(hitLimit(e) ? 'That’s ten posts today, which is the most a day. The board will still be here tomorrow.' : 'That didn’t post. Nothing’s lost; try again.');
       setBusy(false);
     }
   };

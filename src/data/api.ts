@@ -53,6 +53,9 @@ export class SendError extends Error {
   }
 }
 
+/** True when the server refused because of a daily limit (posts, threads, replies, songs, or bot-like messaging). */
+export const hitLimit = (e: unknown) => e instanceof Error && e.message === 'too-many';
+
 export interface EarshotApi {
   /** Where this data lives: on this phone only, or on the backend. A few screens word things differently. */
   readonly kind: 'phone' | 'server';

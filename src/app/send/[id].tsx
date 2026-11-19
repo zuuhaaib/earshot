@@ -8,7 +8,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApi, useLive, useSession } from '@/data';
-import { SendError } from '@/data/api';
+import { SendError, hitLimit } from '@/data/api';
 import { seedTrack, stopPreview, type Track } from '@/music';
 import { BackLink, Field, goBack } from '@/ui/Field';
 import { Card, Heading, Paper, PinBadge, PosterButton, Stamp, Txt } from '@/ui/print';
@@ -112,7 +112,13 @@ export default function SendSong() {
         goBack();
       }
     } catch (e) {
-      slip(e instanceof SendError ? WHY_NOT[e.code] : 'That didn’t send. Nothing’s lost; try again.');
+      slip(
+        e instanceof SendError
+          ? WHY_NOT[e.code]
+          : hitLimit(e)
+            ? 'That’s thirty songs to new people today, which is the most a day. Pick up where you left off tomorrow.'
+            : 'That didn’t send. Nothing’s lost; try again.',
+      );
       setBusy(false);
     }
   };

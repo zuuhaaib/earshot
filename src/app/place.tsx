@@ -42,8 +42,12 @@ export default function PlaceScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       slip(goingOnAir ? 'You’re on air. Act natural.' : `Nearby is now around ${area.name}.`);
       goBack();
-    } catch {
-      setNotice('That didn’t save. Try once more.');
+    } catch (e) {
+      setNotice(
+        e instanceof Error && e.message === 'moving-too-fast'
+          ? 'You’ve changed spots a lot just now. So nobody can hop round every neighbourhood looking for someone, you can move once every 5 minutes and 12 times a day. Try again in a bit.'
+          : 'That didn’t save. Try once more.',
+      );
       setBusy(false);
     }
   };

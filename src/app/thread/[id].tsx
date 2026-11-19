@@ -5,6 +5,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApi, useLive, usePulse, useSession, type Person, type ThreadReply } from '@/data';
+import { hitLimit } from '@/data/api';
 import { stopPreview, type Track } from '@/music';
 import { colors, fonts, tilt } from '@/theme';
 import { BackLink } from '@/ui/Field';
@@ -129,8 +130,8 @@ export default function ThreadScreen() {
       setDraft('');
       setAttached(null);
       setTimeout(() => list.current?.scrollToEnd({ animated: true }), 250);
-    } catch {
-      slip('That didn’t post. Your reply is still in the box.');
+    } catch (e) {
+      slip(hitLimit(e) ? 'You’ve replied a lot today, and that’s the most for one day. Your reply is still in the box for tomorrow.' : 'That didn’t post. Your reply is still in the box.');
     } finally {
       setSending(false);
     }

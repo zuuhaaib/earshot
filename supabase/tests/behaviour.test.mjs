@@ -100,6 +100,7 @@ describe('two real accounts', () => {
     // different area: not nearby
     await api.rpc('set_area', { p_area: 'to-annex', p_source: 'picked' });
     assert.deepEqual(await api.rpc('get_nearby'), []);
+    await api.clock.advance(6 * MIN); // areas can't be hopped between faster than this
     await api.rpc('set_area', QW);
 
     await api.as(a);
@@ -282,7 +283,9 @@ describe('crate', () => {
   test('keeps the first copy of a track, so nobody can deface a song everyone uses', async () => {
     const api = await freshDb();
     await api.signUp();
-    await api.rpc('toggle_save', { p_track: { ...track('sidhu-295'), title: 'VANDALISED', artworkUrl: 'https://evil.example/x.jpg' } });
+    // a copy with someone else's artwork is refused outright; the title on its own can't overwrite the real one
+    assert.equal(await api.fails('toggle_save', { p_track: { ...track('sidhu-295'), title: 'VANDALISED', artworkUrl: 'https://evil.example/x.jpg' } }), 'bad-track');
+    await api.rpc('toggle_save', { p_track: { ...track('sidhu-295'), title: 'VANDALISED' } });
     const [saved] = await api.rpc('get_crate');
     assert.equal(saved.title, '295');
     assert.ok(!saved.artworkUrl.includes('evil'));
@@ -343,6 +346,8 @@ describe('rooms', () => {
   test('shows what you really played, unless you hide it, and never sends hidden songs', async () => {
     const api = await freshDb();
     const me = await api.signUp();
+    await api.rpc('set_area', QW);
+    await api.rpc('set_sharing', { p_on: true }); // only on-air listening shows in a room
     await api.rpc('set_now_playing', { p_track: track('sidhu-295'), p_note: null });
     await api.clock.advance(MIN);
     await api.rpc('set_now_playing', { p_track: track('alvvays-archie'), p_note: null });

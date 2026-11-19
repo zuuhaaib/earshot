@@ -5,6 +5,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApi, useSession } from '@/data';
+import { hitLimit } from '@/data/api';
 import { BackLink, Field } from '@/ui/Field';
 import { Heading, Paper, PosterButton, Txt } from '@/ui/print';
 import { useSlip } from '@/ui/Slip';
@@ -33,8 +34,8 @@ export default function NewThread() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       // swap this form for the thread, so "back" returns to the room
       router.replace({ pathname: '/thread/[id]', params: { id } });
-    } catch {
-      slip('That didn’t post. Nothing’s lost; try again.');
+    } catch (e) {
+      slip(hitLimit(e) ? 'That’s five new threads today, which is the most a day. Reply to one in the meantime.' : 'That didn’t post. Nothing’s lost; try again.');
       setBusy(false);
     }
   };

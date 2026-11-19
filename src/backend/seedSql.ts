@@ -89,14 +89,14 @@ export function buildSeedSql(): string {
     '  -- A week of listening history, so rooms have a "recently played" and cities have a chart from',
     '  -- day one. It carries a marker instead of a real area, so it never shows in Nearby.',
     "  delete from app.plays where area_id = 'history';",
-    '  insert into app.plays (user_id, track_id, kind, note, area_id, started_at, ended_at) values',
+    '  insert into app.plays (user_id, track_id, kind, note, area_id, started_at, ended_at, on_air) values',
   );
   const history: string[] = [];
   for (const p of residents) {
     const plays = tastes[p.id]?.plays ?? [];
     for (let i = 0; i < plays.length * 2; i++) {
       const ago = (3 + ((p.id.charCodeAt(0) * 7 + i * 19) % 150)) * HOUR + i * 240_000;
-      history.push(`    (${q(p.id)}, ${q(plays[i % plays.length])}, 'play', null, 'history', at - ${ago}, at - ${ago - 200_000})`);
+      history.push(`    (${q(p.id)}, ${q(plays[i % plays.length])}, 'play', null, 'history', at - ${ago}, at - ${ago - 200_000}, true)`);
     }
   }
   body.push(history.join(',\n') + ';', '');

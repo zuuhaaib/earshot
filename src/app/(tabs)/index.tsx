@@ -195,8 +195,8 @@ export default function NearbyScreen() {
       if (areaSource === 'gps') {
         const area = await relocateQuietly();
         if (area && area.id !== areaId) {
-          await api.setArea(area.id, 'gps');
-          slip(`You’ve moved. Now around ${area.name}.`);
+          // too many moves just now: stay where you were rather than fail the refresh
+          if (await api.setArea(area.id, 'gps').then(() => true, () => false)) slip(`You’ve moved. Now around ${area.name}.`);
         }
       }
       await api.refreshNearby();

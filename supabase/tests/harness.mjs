@@ -112,6 +112,6 @@ export const track = (id, artist = 'Test Artist', title = `Song ${id}`) => ({
   album: 'An Album',
   year: 2020,
   genre: 'Alternative',
-  artworkUrl: 'https://art.example/600x600bb.jpg',
-  previewUrl: 'https://preview.example/a.m4a',
+  artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/test/600x600bb.jpg',
+  previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/test/a.m4a',
 });

@@ -8,6 +8,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApi, useLive, usePulse, useSession, type Chat, type ChatMessage } from '@/data';
+import { hitLimit } from '@/data/api';
 import { stopPreview } from '@/music';
 import { colors, fonts, tilt } from '@/theme';
 import { BackLink } from '@/ui/Field';
@@ -157,9 +158,9 @@ export default function ChatScreen() {
     try {
       await api.sendMessage(chat.id, text);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    } catch {
+    } catch (e) {
       setDraft(text); // give it back so nothing typed is lost
-      slip('That didn’t send. Your message is still in the box.');
+      slip(hitLimit(e) ? 'That’s a lot of messages very fast. Give it a minute; your message is still in the box.' : 'That didn’t send. Your message is still in the box.');
     } finally {
       setSending(false);
     }
