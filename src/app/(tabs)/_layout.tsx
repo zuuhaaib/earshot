@@ -5,6 +5,7 @@ import { Tabs } from 'expo-router/js-tabs';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApi, useLive, useSession } from '@/data';
+import { usePush } from '@/backend/push';
 import { useLastfmSync } from '@/lastfm/sync';
 import { SPOTIFY_ENABLED } from '@/spotify/config';
 import { useSpotifySync } from '@/spotify/sync';
@@ -93,6 +94,7 @@ export default function TabsLayout() {
   // Keeps "what you've got on" in step with Spotify while the signed-in app is open.
   useSpotifySync(api, SPOTIFY_ENABLED ? (session?.me?.id ?? null) : null);
   useLastfmSync(api, session?.me?.id ?? null);
+  usePush(api.kind === 'server' ? (session?.me?.id ?? null) : null);
   if (!session) return null;
   // Nobody signed in yet: go and make a badge first.
   if (!session.me) return <Redirect href="/welcome" />;

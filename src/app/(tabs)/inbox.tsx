@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApi, useLive, usePulse, useSession, type ChatSummary, type SongRequest } from '@/data';
 import { colors, tilt } from '@/theme';
 import { Card, Heading, Paper, PinBadge, PosterButton, Stamp, Tape, Txt } from '@/ui/print';
+import { PushCard } from '@/ui/PushCard';
 import { Sleeve } from '@/ui/Sleeve';
 import { useSlip } from '@/ui/Slip';
 import { ago } from '@/ui/SongPicker';
@@ -171,6 +172,8 @@ export default function InboxScreen() {
         <Txt variant="poster" accessibilityRole="header">
           inbox
         </Txt>
+
+        <PushCard />
 
         {empty ? (
           <Card rotate={-1.2} style={{ marginTop: 28 }} innerStyle={{ padding: 20 }}>

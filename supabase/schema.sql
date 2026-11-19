@@ -138,6 +138,16 @@ create table if not exists app.chat_reads (
 -- Deleting a chat is one-sided: it empties the conversation for the person who
 -- deleted it and leaves the other person's copy alone. Messages sent after
 -- hidden_at show up again as a fresh conversation.
+-- Where to send push notifications: one row per phone. A phone that changes
+-- accounts takes its token with it, so a notification only ever goes to whoever
+-- is logged in on that phone now.
+create table if not exists app.push_tokens (
+  token text primary key,
+  user_id text not null references app.profiles (id) on delete cascade,
+  updated_at bigint not null
+);
+create index if not exists push_tokens_by_user on app.push_tokens (user_id);
+
 create table if not exists app.chat_hides (
   request_id bigint not null references app.requests (id) on delete cascade,
   user_id text not null references app.profiles (id) on delete cascade,
@@ -238,7 +248,7 @@ create table if not exists app.reports (
 do $$
 declare t text;
 begin
-  foreach t in array array['profiles','tracks','plays','saves','requests','messages','chat_reads','rooms','posts','threads','replies','presence','tastes','openers','sim_state','blocks','reports','chat_hides']
+  foreach t in array array['profiles','tracks','plays','saves','requests','messages','chat_reads','rooms','posts','threads','replies','presence','tastes','openers','sim_state','blocks','reports','chat_hides','push_tokens']
   loop
     execute format('alter table app.%I enable row level security', t);
   end loop;
@@ -1455,6 +1465,86 @@ end $$;
 
 drop trigger if exists alert_report on app.reports;
 create trigger alert_report after insert on app.reports for each row execute function app.alert_report();
+
+-- ---------------------------------------------------------------------------
+-- push notifications
+-- ---------------------------------------------------------------------------
+-- A phone is told about three things, and nothing else: a song sent to you,
+-- a yes to a song you sent, and a new message in a chat. Never who is nearby,
+-- never a no. The text names the person and the song, but never quotes a
+-- message, so nothing private shows on a locked screen.
+-- Sending goes through Expo's push service, queued by pg_net after the change is
+-- saved, so a failed notification never undoes anything. No secret is needed.
+
+create or replace function public.register_push_token(p_token text) returns void
+language plpgsql security definer set search_path = '' as $$
+declare v text := app.need_me();
+begin
+  if p_token is null or length(p_token) > 200 or not (p_token like 'ExponentPushToken[%]' or p_token like 'ExpoPushToken[%]') then
+    raise exception 'bad-token';
+  end if;
+  insert into app.push_tokens (token, user_id, updated_at) values (p_token, v, app.now_ms())
+    on conflict (token) do update set user_id = excluded.user_id, updated_at = excluded.updated_at;
+end $$;
+
+-- Logging out stops this phone being notified for that account.
+create or replace function public.forget_push_token(p_token text) returns void
+language sql security definer set search_path = '' as $$
+  delete from app.push_tokens where token = p_token and user_id = app.me()
+$$;
+
+create or replace function app.push(p_to text, p_title text, p_body text, p_url text) returns void
+language plpgsql security definer set search_path = '' as $$
+declare messages jsonb;
+begin
+  begin
+    select jsonb_agg(jsonb_build_object(
+        'to', t.token, 'title', p_title, 'body', p_body, 'data', jsonb_build_object('url', p_url),
+        'sound', 'default', 'channelId', 'default', 'priority', 'high'))
+      into messages from app.push_tokens t where t.user_id = p_to;
+    if messages is null then return; end if;
+    -- shortcut: tokens Expo reports as dead (DeviceNotRegistered) are not pruned; they're replaced when the phone registers again
+    perform net.http_post(
+      url := 'https://exp.host/--/api/v2/push/send',
+      headers := jsonb_build_object('Content-Type', 'application/json', 'Accept', 'application/json'),
+      body := messages);
+  exception when others then
+    raise warning 'a notification for % could not be queued: %', p_to, sqlerrm;
+  end;
+end $$;
+
+create or replace function app.push_on_request() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare sender text; receiver text; song text;
+begin
+  select coalesce(t.title, 'a song') into song from app.tracks t where t.id = new.track_id;
+  if tg_op = 'INSERT' then
+    select name into sender from app.profiles where id = new.from_id;
+    perform app.push(new.to_id, coalesce(sender, 'Someone') || ' sent you a song', coalesce(song, 'a song') || '. Yes, or let it pass.', '/inbox');
+  elsif old.status = 'pending' and new.status = 'accepted' then
+    -- a no is never announced; only a yes is
+    select name into receiver from app.profiles where id = new.to_id;
+    perform app.push(new.from_id, coalesce(receiver, 'They') || ' said yes', 'To ' || coalesce(song, 'your song') || '. Your chat is open.', '/chat/' || new.id);
+  end if;
+  return null;
+end $$;
+
+create or replace function app.push_on_message() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare q app.requests; other text; sender text;
+begin
+  select * into q from app.requests where id = new.request_id;
+  other := case when new.from_id = q.from_id then q.to_id else q.from_id end;
+  if app.i_blocked(other, new.from_id) then return null; end if; -- blocked people's messages are never shown, so never announced
+  select name into sender from app.profiles where id = new.from_id;
+  perform app.push(other, coalesce(sender, 'Someone'), case when new.track_id is null then 'Sent you a message.' else 'Sent you a song.' end, '/chat/' || new.request_id);
+  return null;
+end $$;
+
+drop trigger if exists push_request on app.requests;
+create trigger push_request after insert or update on app.requests for each row execute function app.push_on_request();
+drop trigger if exists push_message on app.messages;
+create trigger push_message after insert on app.messages for each row execute function app.push_on_message();
 
 -- ---------------------------------------------------------------------------
 -- who may call what

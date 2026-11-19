@@ -76,7 +76,14 @@
           "isAndroidBackgroundLocationEnabled": false
         }
       ],
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/android-icon-monochrome.png",
+          "color": "#F0502F"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

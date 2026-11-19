@@ -303,8 +303,18 @@ export async function logIn(email: string, password: string): Promise<CloudProfi
   return profileFor(data.user.id, data.user.email ?? email);
 }
 
+// The push token this phone registered for whoever is logged in, so logging out can stop it.
+let pushToken: string | null = null;
+export const setPushToken = (token: string | null) => {
+  pushToken = token;
+};
+
 export async function logOut(): Promise<void> {
   if (!cloudConfigured()) return;
+  if (pushToken) {
+    await callServer('forget_push_token', { p_token: pushToken }).catch(() => {});
+    pushToken = null;
+  }
   // "local" ends the session on this phone only; your other devices stay logged in.
   await supabase().auth.signOut({ scope: 'local' }).catch(() => {});
 }
