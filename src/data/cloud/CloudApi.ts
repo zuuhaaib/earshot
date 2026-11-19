@@ -78,6 +78,7 @@ type ServerSession = {
   areaSource: 'gps' | 'picked' | null;
   nowPlaying: NowPlaying | null;
   needsProfile: boolean;
+  songMatches: boolean;
 };
 
 export class CloudApi implements EarshotApi {
@@ -175,7 +176,7 @@ export class CloudApi implements EarshotApi {
   async getSession(): Promise<Session> {
     if (!(await this.loggedIn())) {
       this.tune(null, null);
-      return { me: null, sharing: false, area: null, areaSource: null, nowPlaying: null, needsPassword: false, needsProfile: false };
+      return { me: null, sharing: false, area: null, areaSource: null, nowPlaying: null, needsPassword: false, needsProfile: false, songMatches: false };
     }
     const s = await this.read<ServerSession>('get_session');
     this.tune(s.me, s.areaId);
@@ -187,6 +188,7 @@ export class CloudApi implements EarshotApi {
       nowPlaying: s.nowPlaying,
       needsPassword: false,
       needsProfile: s.needsProfile,
+      songMatches: !!s.songMatches,
     };
   }
 
@@ -246,6 +248,9 @@ export class CloudApi implements EarshotApi {
 
   // ---- sharing, place, listening -----------------------------------------
 
+  setSongMatches(on: boolean) {
+    return this.write<void>('set_song_matches', { p_on: on }, 'session');
+  }
   setSharing(on: boolean) {
     return this.write<void>('set_sharing', { p_on: on }, 'session', 'nearby');
   }

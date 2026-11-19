@@ -58,6 +58,8 @@ alter table app.profiles add column if not exists sharing boolean not null defau
 -- The coarse area this person was last placed in. Never coordinates. Never sent to other people.
 alter table app.profiles add column if not exists area_id text;
 alter table app.profiles add column if not exists area_source text;
+-- "songs that found each other": off until the person turns it on
+alter table app.profiles add column if not exists song_matches boolean not null default false;
 alter table app.profiles drop constraint if exists handle_shape;
 alter table app.profiles add constraint handle_shape check (handle ~ '^[a-z0-9._]{2,28}$');
 create unique index if not exists profiles_handle_unique on app.profiles (lower(handle));
@@ -138,6 +140,15 @@ create table if not exists app.chat_reads (
 -- Deleting a chat is one-sided: it empties the conversation for the person who
 -- deleted it and leaves the other person's copy alone. Messages sent after
 -- hidden_at show up again as a fresh conversation.
+-- Songs that found each other: which match notifications went to whom, so
+-- nobody hears about the same song twice in a day, or about more than three.
+create table if not exists app.song_matches (
+  user_id text not null references app.profiles (id) on delete cascade,
+  track_id text not null,
+  sent_at bigint not null
+);
+create index if not exists song_matches_by_user on app.song_matches (user_id, sent_at);
+
 -- Where to send push notifications: one row per phone. A phone that changes
 -- accounts takes its token with it, so a notification only ever goes to whoever
 -- is logged in on that phone now.
@@ -248,7 +259,7 @@ create table if not exists app.reports (
 do $$
 declare t text;
 begin
-  foreach t in array array['profiles','tracks','plays','saves','requests','messages','chat_reads','rooms','posts','threads','replies','presence','tastes','openers','sim_state','blocks','reports','chat_hides','push_tokens']
+  foreach t in array array['profiles','tracks','plays','saves','requests','messages','chat_reads','rooms','posts','threads','replies','presence','tastes','openers','sim_state','blocks','reports','chat_hides','push_tokens','song_matches']
   loop
     execute format('alter table app.%I enable row level security', t);
   end loop;
@@ -471,7 +482,7 @@ begin
     order by pl.started_at desc, pl.id desc limit 1;
   return jsonb_build_object(
     'me', app.person_json(p), 'sharing', p.sharing, 'areaId', p.area_id, 'areaSource', p.area_source,
-    'nowPlaying', np, 'needsProfile', not p.onboarded);
+    'nowPlaying', np, 'needsProfile', not p.onboarded, 'songMatches', p.song_matches);
 end $$;
 
 -- Finish a profile that was started by a Google sign-in.
@@ -1545,6 +1556,127 @@ drop trigger if exists push_request on app.requests;
 create trigger push_request after insert or update on app.requests for each row execute function app.push_on_request();
 drop trigger if exists push_message on app.messages;
 create trigger push_message after insert on app.messages for each row execute function app.push_on_message();
+
+-- ---------------------------------------------------------------------------
+-- songs that found each other
+-- ---------------------------------------------------------------------------
+-- When two people in the same area play the same song within twelve hours,
+-- both are told about the other: "Ben Ito near The Annex played Pink Moon this
+-- afternoon. So did you." Tapping it opens their room.
+-- Names are shown, so it only ever matches two people who have BOTH switched
+-- it on, and only songs both of them played on air, which Nearby already
+-- showed. The only place named is the area they share. Quiet by design: once
+-- per song per day, three a day at most.
+
+-- The names of the areas, the same list as src/data/areas.ts (a test checks they match).
+create or replace function app.area_name(p_id text) returns text
+language sql immutable set search_path = '' as $$
+  select coalesce((select v.name from (values
+    ('to-downtown', 'Downtown core'),
+    ('to-queen-west', 'Queen West'),
+    ('to-kensington', 'Kensington & Chinatown'),
+    ('to-annex', 'The Annex'),
+    ('to-yorkville', 'U of T & Yorkville'),
+    ('to-little-italy', 'Little Italy'),
+    ('to-liberty', 'Liberty Village'),
+    ('to-parkdale', 'Parkdale'),
+    ('to-roncy', 'Roncesvalles & High Park'),
+    ('to-junction', 'The Junction'),
+    ('to-st-clair', 'St. Clair West'),
+    ('to-leslieville', 'Leslieville'),
+    ('to-danforth', 'The Danforth'),
+    ('to-east-york', 'East York'),
+    ('to-beaches', 'The Beaches'),
+    ('to-yonge-eg', 'Yonge & Eglinton'),
+    ('to-north-york', 'North York Centre'),
+    ('to-york-u', 'York University'),
+    ('to-scarborough', 'Scarborough Town Centre'),
+    ('to-etobicoke', 'Etobicoke lakeshore'),
+    ('va-vmc', 'Vaughan Metropolitan Centre'),
+    ('va-woodbridge', 'Woodbridge'),
+    ('va-maple', 'Maple'),
+    ('va-thornhill', 'Thornhill'),
+    ('mi-square-one', 'Square One'),
+    ('mi-port-credit', 'Port Credit'),
+    ('br-downtown', 'Downtown Brampton'),
+    ('br-bramalea', 'Bramalea'),
+    ('ma-unionville', 'Unionville'),
+    ('rh-centre', 'Richmond Hill Centre'),
+    ('oa-downtown', 'Downtown Oakville')
+  ) v(id, name) where v.id = p_id), 'you')
+$$;
+
+-- "just now", "this morning", "this afternoon", "this evening", "last night", in Toronto time.
+-- shortcut: every area is in the GTA, so one time zone fits all; give areas their own zone if earshot leaves Ontario
+create or replace function app.when_words(p_at bigint, p_now bigint) returns text
+language sql immutable set search_path = '' as $$
+  select case
+    when p_now - p_at < 1800000 then 'just now'
+    when (to_timestamp(p_at / 1000.0) at time zone 'America/Toronto')::date < (to_timestamp(p_now / 1000.0) at time zone 'America/Toronto')::date then 'last night'
+    when extract(hour from to_timestamp(p_at / 1000.0) at time zone 'America/Toronto') < 5 then 'in the small hours'
+    when extract(hour from to_timestamp(p_at / 1000.0) at time zone 'America/Toronto') < 12 then 'this morning'
+    when extract(hour from to_timestamp(p_at / 1000.0) at time zone 'America/Toronto') < 17 then 'this afternoon'
+    else 'this evening' end
+$$;
+
+create or replace function public.set_song_matches(p_on boolean) returns void
+language plpgsql security definer set search_path = '' as $$
+declare v text := app.need_me();
+begin
+  update app.profiles set song_matches = coalesce(p_on, false) where id = v;
+end $$;
+
+-- Tell one person about one match with another, if they haven't heard enough today.
+drop function if exists app.tell_match(text, text, text, bigint, bigint);
+create or replace function app.tell_match(p_to text, p_other text, p_track text, p_area text, p_at bigint, p_now bigint) returns void
+language plpgsql security definer set search_path = '' as $$
+declare song text; who text;
+begin
+  if exists (select 1 from app.song_matches where user_id = p_to and track_id = p_track and sent_at > p_now - 86400000) then return; end if;
+  if (select count(*) from app.song_matches where user_id = p_to and sent_at > p_now - 86400000) >= 3 then return; end if;
+  select title into song from app.tracks where id = p_track;
+  select name into who from app.profiles where id = p_other;
+  insert into app.song_matches (user_id, track_id, sent_at) values (p_to, p_track, p_now);
+  perform app.push(p_to, 'songs that found each other',
+    coalesce(who, 'Someone') || ' near ' || app.area_name(p_area) || ' played ' || coalesce(song, 'the same song') || ' ' || app.when_words(p_at, p_now) || '. So did you.',
+    '/room/' || p_other);
+end $$;
+
+create or replace function app.match_on_play() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare me app.profiles; other record; told_me boolean := false;
+begin
+  begin
+    select * into me from app.profiles where id = new.user_id;
+    -- you have to want this, and be on air, to be matched at all
+    if new.area_id is null or not me.sharing or not me.song_matches then return null; end if;
+
+    -- everyone here who wants it too and had the same song on air in the last twelve hours, latest first
+    for other in
+      select * from (
+        select distinct on (pl.user_id) pl.user_id, pl.started_at from app.plays pl join app.profiles u on u.id = pl.user_id
+        where pl.track_id = new.track_id and pl.area_id = new.area_id and pl.user_id <> new.user_id
+          and u.sharing and u.song_matches
+          and pl.started_at > new.started_at - 43200000 and pl.started_at <= new.started_at
+          and not app.blocked(new.user_id, pl.user_id)
+        order by pl.user_id, pl.started_at desc
+      ) x order by x.started_at desc
+    loop
+      -- they hear about you, and you hear about the most recent of them
+      perform app.tell_match(other.user_id, new.user_id, new.track_id, new.area_id, new.started_at, new.started_at);
+      if not told_me then
+        perform app.tell_match(new.user_id, other.user_id, new.track_id, new.area_id, other.started_at, new.started_at);
+        told_me := true;
+      end if;
+    end loop;
+  exception when others then
+    raise warning 'song match for play % skipped: %', new.id, sqlerrm; -- a match is a nicety; the play must always save
+  end;
+  return null;
+end $$;
+
+drop trigger if exists match_play on app.plays;
+create trigger match_play after insert on app.plays for each row execute function app.match_on_play();
 
 -- ---------------------------------------------------------------------------
 -- who may call what

@@ -21,6 +21,7 @@
         "What you play: the song you currently have on in earshot, any note you attach to it, when you put it on, and the area you were sharing it in. Songs you played while sharing was off are not shown to people nearby.",
         "What you send and write: songs you send people, chat messages, your room and everything on it, guestbook signatures, city posts, and threads and replies in artist rooms.",
         "Your crate: the songs you have saved.",
+        "If you turn on “songs that found each other”: a note of which songs it has told you about and when, so it never repeats itself or sends more than three a day. A match names the other person to you and you to them, so it only ever matches two people who have both switched it on, and only songs you both played while sharing.",
         "Safety records: the list of people you have blocked, and any reports you make."
       ]
     },

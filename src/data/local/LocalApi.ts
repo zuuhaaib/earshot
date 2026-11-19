@@ -297,10 +297,10 @@ export class LocalApi implements EarshotApi, SimHost {
     const areaId = await this.meta('area_id');
     const source = (await this.meta('area_source')) as Session['areaSource'];
     const area = areaId ? areaById(areaId) : null;
-    if (!meId) return { me: null, sharing: false, area, areaSource: source, nowPlaying: null, needsPassword: false, needsProfile: false };
+    if (!meId) return { me: null, sharing: false, area, areaSource: source, nowPlaying: null, needsPassword: false, needsProfile: false, songMatches: false };
 
     const rows = await this.db.all<UserRow & { pass_hash: string | null }>('SELECT * FROM users WHERE id = ?', [meId]);
-    if (!rows[0]) return { me: null, sharing: false, area, areaSource: source, nowPlaying: null, needsPassword: false, needsProfile: false };
+    if (!rows[0]) return { me: null, sharing: false, area, areaSource: source, nowPlaying: null, needsPassword: false, needsProfile: false, songMatches: false };
 
     const open = await this.db.all<TrackRow & { note: string | null; started_at: number }>(
       `SELECT ${TRACK_COLS}, p.note, p.started_at FROM plays p JOIN tracks t ON t.id = p.track_id
@@ -315,6 +315,7 @@ export class LocalApi implements EarshotApi, SimHost {
       nowPlaying: open[0] ? { track: toTrack(open[0]), note: open[0].note, since: open[0].started_at } : null,
       needsPassword: !rows[0].seeded && !rows[0].pass_hash,
       needsProfile: false,
+      songMatches: false,
     };
   }
 
@@ -541,6 +542,9 @@ export class LocalApi implements EarshotApi, SimHost {
   }
 
   // ---- sharing and place --------------------------------------------------
+
+  /** With no server there's nothing to send a notification, so this does nothing. */
+  async setSongMatches(): Promise<void> {}
 
   async setSharing(on: boolean): Promise<void> {
     const me = await this.meId();

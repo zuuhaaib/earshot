@@ -86,6 +86,8 @@ export interface EarshotApi {
   // ---- sharing and place ------------------------------------------------
   /** Go on or off air. Going off removes you from Nearby immediately. */
   setSharing(on: boolean): Promise<void>;
+  /** Turn "songs that found each other" notifications on or off. Only the backend can send them. */
+  setSongMatches(on: boolean): Promise<void>;
   /** Place this phone in a coarse area. The id is all that's kept. */
   setArea(areaId: string, source: 'gps' | 'picked'): Promise<void>;
 

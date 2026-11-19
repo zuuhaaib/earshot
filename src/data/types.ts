@@ -125,6 +125,8 @@ export type Session = {
   needsPassword: boolean;
   /** True for someone who signed in with Google and hasn't picked a handle and badge yet. */
   needsProfile: boolean;
+  /** Opted in to "songs that found each other" notifications. */
+  songMatches: boolean;
 };
 
 // ---- rooms ----------------------------------------------------------------

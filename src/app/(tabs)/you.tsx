@@ -14,6 +14,7 @@ import { PhoneImportCard } from '@/ui/PhoneImportCard';
 import { LastfmCard } from '@/ui/LastfmCard';
 import { SPOTIFY_ENABLED } from '@/spotify/config';
 import { SpotifyCard } from '@/ui/SpotifyCard';
+import { SongMatchesCard } from '@/ui/SongMatchesCard';
 import { DashedRule } from '@/ui/SongCard';
 
 /** You: your room, your crate, and who's holding the phone. */
@@ -118,6 +119,7 @@ export default function YouScreen() {
         <Heading style={{ marginTop: 34 }}>what you’re playing</Heading>
         {SPOTIFY_ENABLED ? <SpotifyCard userId={me.id} /> : null}
         <LastfmCard userId={me.id} />
+        <SongMatchesCard />
 
         <Heading style={{ marginTop: 34 }}>your crate</Heading>
         {crate?.length ? (
