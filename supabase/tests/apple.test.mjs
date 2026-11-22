@@ -21,7 +21,7 @@ test('the client secret is an ES256 JWT that Apple can check with the key', asyn
     iat: 1_000_000,
     exp: 1_000_300,
     aud: 'https://appleid.apple.com',
-    sub: 'com.earshot.app',
+    sub: 'lol.earshot.app',
   });
   assert.equal(fromB64url(sig).length, 64, 'raw r||s, not DER');
   const ok = await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, publicKey, fromB64url(sig), new TextEncoder().encode(`${head}.${body}`));

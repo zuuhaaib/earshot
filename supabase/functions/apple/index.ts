@@ -7,7 +7,7 @@
 //
 // Setting it up:
 //   1. developer.apple.com → Certificates, Identifiers & Profiles → Keys → "+" →
-//      tick Sign in with Apple, configure it with the app's ID (com.earshot.app) → download
+//      tick Sign in with Apple, configure it with the app's ID (lol.earshot.app) → download
 //      the .p8 file. Note the Key ID, and your Team ID (top right of the page).
 //   2. Supabase → Edge Functions → Secrets: add APPLE_TEAM_ID, APPLE_KEY_ID, and
 //      APPLE_PRIVATE_KEY (the whole .p8 file, BEGIN and END lines included).
@@ -16,7 +16,7 @@
 //   npx supabase secrets set APPLE_TEAM_ID=... APPLE_KEY_ID=... APPLE_PRIVATE_KEY="$(cat AuthKey_XXXX.p8)" --project-ref <ref>
 //   npx supabase functions deploy apple --project-ref <ref>
 
-const CLIENT_ID = 'com.earshot.app'; // the iOS bundle ID: native Sign in with Apple tokens are issued to it
+const CLIENT_ID = 'lol.earshot.app'; // the iOS bundle ID: native Sign in with Apple tokens are issued to it
 const APPLE = 'https://appleid.apple.com';
 
 const CORS = {

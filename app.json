@@ -13,7 +13,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
-      "bundleIdentifier": "com.earshot.app",
+      "bundleIdentifier": "lol.earshot.app",
       "usesAppleSignIn": true,
       "requireFullScreen": true
     },
@@ -35,7 +35,7 @@
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_BACKGROUND_LOCATION"
       ],
-      "package": "com.earshot.app"
+      "package": "lol.earshot.app"
     },
     "web": {
       "favicon": "./assets/favicon.png",
