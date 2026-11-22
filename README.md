@@ -69,6 +69,7 @@ Never put a Supabase secret key, the database password, the Spotify client secre
 4. Under Authentication, turn on the sign-in methods you want: email, Google, Apple.
 5. Add `earshot://**` to the allowed redirect URLs.
 6. For Last.fm, save your key as an Edge Function secret called `LASTFM_API_KEY` and deploy [supabase/functions/lastfm](supabase/functions/lastfm/index.ts). The key stays on the server and never reaches a phone.
+7. For Sign in with Apple, make a Sign in with Apple key in your Apple developer account, save `APPLE_TEAM_ID`, `APPLE_KEY_ID` and `APPLE_PRIVATE_KEY` (the whole `.p8` file) as Edge Function secrets, and deploy [supabase/functions/apple](supabase/functions/apple/index.ts). Apple requires it: deleting an account made with Apple revokes earshot's access with Apple too.
 
 Whenever `schema.sql` changes, run it again. It upgrades in place.
 

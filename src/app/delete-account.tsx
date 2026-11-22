@@ -1,5 +1,5 @@
 /** Delete your account for good. Plain words, one deliberate step, no way back. */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, ScrollView } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,6 +9,7 @@ import { Card, Heading, Paper, PosterButton, Txt } from '@/ui/print';
 import { useSlip } from '@/ui/Slip';
 import { disconnect as disconnectLastfm } from '@/lastfm/client';
 import { disconnect as disconnectSpotify } from '@/spotify/client';
+import { CloudError, revokeApple, signedInWithApple } from '@/backend/accounts';
 
 const GONE = [
   'Your profile, handle and room',
@@ -26,6 +27,14 @@ export default function DeleteAccount() {
   const me = session?.me ?? null;
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
+  const [apple, setApple] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    signedInWithApple().then((yes) => alive && setApple(yes), () => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const onServer = api.kind === 'server';
   const matches = !!me && typed.trim().replace(/^@/, '').toLowerCase() === me.handle.toLowerCase();
@@ -34,14 +43,19 @@ export default function DeleteAccount() {
     if (!me || !matches) return;
     setBusy(true);
     try {
+      if (onServer && apple) await revokeApple();
       await disconnectSpotify(me.id).catch(() => {});
       await disconnectLastfm(me.id).catch(() => {});
       await api.deleteAccount();
       slip('Your account is deleted. Thanks for listening.');
       if (router.canDismiss()) router.dismissAll();
       router.replace('/welcome');
-    } catch {
-      slip('The delete didn’t go through, so nothing was removed. Try again.');
+    } catch (e) {
+      slip(
+        e instanceof CloudError && e.code === 'cancelled'
+          ? 'Apple wasn’t asked, so nothing was removed.'
+          : 'The delete didn’t go through, so nothing was removed. Try again.',
+      );
       setBusy(false);
     }
   };
@@ -80,6 +94,11 @@ export default function DeleteAccount() {
             {onServer ? (
               <Txt variant="body" style={{ marginBottom: 6 }}>
                 – Your login. The email address is freed, so you could sign up again later, from scratch.
+              </Txt>
+            ) : null}
+            {onServer && apple ? (
+              <Txt variant="body" style={{ marginBottom: 6 }}>
+                – earshot’s access to your Apple ID. Apple asks you to confirm once more, then it’s withdrawn.
               </Txt>
             ) : null}
             <Txt variant="label" tone="soft" style={{ marginTop: 10, marginBottom: 8 }}>

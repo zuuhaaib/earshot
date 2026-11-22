@@ -458,3 +458,28 @@ export async function signInWithApple(): Promise<CloudProfile> {
 
   return profileFor(user.id, user.email ?? credential.email ?? '');
 }
+
+/** Whether this login came from Sign in with Apple on an iPhone, so deleting it has to tell Apple too. */
+export async function signedInWithApple(): Promise<boolean> {
+  if (!(await appleAvailable())) return false;
+  const { data } = await supabase().auth.getSession();
+  return (data.session?.user.app_metadata?.providers as string[] | undefined)?.includes('apple') ?? false;
+}
+
+/**
+ * Apple's rule for deleting an account made with Sign in with Apple: earshot's access has to be
+ * revoked with Apple. Apple's sheet asks once more, which gives a fresh one-time code, and the
+ * "apple" Edge Function hands it back to Apple to revoke. Throws 'cancelled' if the person backs
+ * out, so the delete stops; any other failure is swallowed, because a broken revoke must never
+ * stop someone deleting their account.
+ */
+export async function revokeApple(): Promise<void> {
+  let code: string | null;
+  try {
+    code = (await AppleAuthentication.signInAsync({ requestedScopes: [] })).authorizationCode;
+  } catch (e) {
+    if ((e as { code?: string }).code === 'ERR_REQUEST_CANCELED') throw new CloudError('cancelled');
+    return;
+  }
+  if (code) await supabase().functions.invoke('apple', { body: { code } }).catch(() => {});
+}
