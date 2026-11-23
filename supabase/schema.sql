@@ -60,6 +60,12 @@ alter table app.profiles add column if not exists area_id text;
 alter table app.profiles add column if not exists area_source text;
 -- "songs that found each other": off until the person turns it on
 alter table app.profiles add column if not exists song_matches boolean not null default false;
+-- Last.fm, followed by the server so your song keeps up while the app is closed: the
+-- username you linked, the Last.fm song last acted on, the track that put on, and when it was last checked.
+alter table app.profiles add column if not exists lastfm_user text;
+alter table app.profiles add column if not exists lastfm_key text;
+alter table app.profiles add column if not exists lastfm_track text;
+alter table app.profiles add column if not exists lastfm_checked_at bigint not null default 0;
 alter table app.profiles drop constraint if exists handle_shape;
 alter table app.profiles add constraint handle_shape check (handle ~ '^[a-z0-9._]{2,28}$');
 create unique index if not exists profiles_handle_unique on app.profiles (lower(handle));
@@ -609,8 +615,22 @@ end $$;
 
 create or replace function public.set_now_playing(p_track jsonb, p_note text) returns void
 language plpgsql security definer set search_path = '' as $$
-declare v text := app.need_me(); at bigint := app.now_ms(); note text := nullif(trim(coalesce(p_note, '')), ''); tid text; p app.profiles;
 begin
+  perform app.play(app.need_me(), p_track, p_note);
+end $$;
+
+-- Put a song on for someone (or take it off with null). Shared by the phone and the server's Last.fm check.
+create or replace function app.play(v text, p_track jsonb, p_note text) returns void
+language plpgsql security definer set search_path = '' as $$
+declare at bigint := app.now_ms(); note text := nullif(trim(coalesce(p_note, '')), ''); tid text; p app.profiles;
+begin
+  -- just put on: the phone and the server's Last.fm check both saw the same song, so keep the one play.
+  -- (Older than 15 minutes, it's played afresh, so a song on repeat doesn't age out of Nearby.)
+  if note is null and jsonb_typeof(p_track) = 'object' and exists (
+    select 1 from app.plays where user_id = v and ended_at is null and kind = 'play' and track_id = left(p_track ->> 'id', 120)
+      and started_at > at - 900000) then
+    return;
+  end if;
   update app.plays set ended_at = at where user_id = v and ended_at is null;
   if p_track is null or jsonb_typeof(p_track) = 'null' then return; end if;
   tid := app.put_track(p_track);
@@ -1746,6 +1766,66 @@ drop trigger if exists match_play on app.plays;
 create trigger match_play after insert on app.plays for each row execute function app.match_on_play();
 
 -- ---------------------------------------------------------------------------
+-- Last.fm, checked by the server
+-- ---------------------------------------------------------------------------
+-- The phone can only follow Last.fm while earshot is open. So the phone tells
+-- the server the username you linked, and the lastfm-sync Edge Function asks
+-- Last.fm every minute for everyone who is sharing, and puts on or takes off
+-- their song here. Only that function (the service role) may call the two below.
+
+create or replace function public.set_lastfm(p_user text) returns void
+language plpgsql security definer set search_path = '' as $$
+declare v text := app.need_me(); u text := nullif(trim(coalesce(p_user, '')), '');
+begin
+  if u is not null and u !~ '^[A-Za-z][A-Za-z0-9_-]{1,14}$' then raise exception 'bad-username'; end if;
+  update app.profiles set lastfm_user = u, lastfm_key = null, lastfm_track = null where id = v and lastfm_user is distinct from u;
+end $$;
+
+-- The next people to check, longest-waiting first, marked as checked so overlapping runs split the work.
+create or replace function public.lastfm_due(p_limit integer) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare result jsonb;
+begin
+  with due as (
+    select id from app.profiles
+    where lastfm_user is not null and sharing and area_id is not null and not seeded
+    order by lastfm_checked_at limit greatest(1, least(coalesce(p_limit, 100), 500))
+    for update skip locked
+  ), stamped as (
+    update app.profiles p set lastfm_checked_at = app.now_ms() from due where p.id = due.id
+    returning p.id, p.lastfm_user, p.lastfm_key
+  )
+  select coalesce(jsonb_agg(jsonb_build_object('id', id, 'user', lastfm_user, 'key', lastfm_key)), '[]'::jsonb) into result from stamped;
+  return result;
+end $$;
+
+-- What Last.fm said for one person. p_key is the song Last.fm has on (null: nothing);
+-- p_track is earshot's copy of it, or null when there's no cover for it anywhere.
+create or replace function public.lastfm_set(p_id text, p_key text, p_track jsonb) returns void
+language plpgsql security definer set search_path = '' as $$
+declare p app.profiles;
+begin
+  select * into p from app.profiles where id = p_id;
+  if not found or p.lastfm_user is null then return; end if;
+  if p_key is null then
+    -- Last.fm went quiet: take the song off, but only if Last.fm put it on. A song picked by hand stays.
+    update app.plays set ended_at = app.now_ms() where user_id = p_id and ended_at is null and track_id = p.lastfm_track;
+    update app.profiles set lastfm_key = null, lastfm_track = null where id = p_id;
+    return;
+  end if;
+  if jsonb_typeof(p_track) = 'object' then
+    begin
+      perform app.play(p_id, p_track, null);
+      update app.profiles set lastfm_key = p_key, lastfm_track = left(p_track ->> 'id', 120) where id = p_id;
+      return;
+    exception when others then
+      raise warning 'Last.fm song for % not put on: %', p_id, sqlerrm;
+    end;
+  end if;
+  update app.profiles set lastfm_key = p_key where id = p_id; -- don't try this song again until it changes
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- who may call what
 -- ---------------------------------------------------------------------------
 -- Only signed-in people may call the app's functions. The two exceptions are
@@ -1758,3 +1838,6 @@ grant execute on all functions in schema public to authenticated;
 revoke execute on function public.handle_new_user() from authenticated;
 grant execute on function public.handle_available(text) to anon, authenticated;
 grant execute on function public.get_session() to anon, authenticated;
+revoke execute on function public.lastfm_due(integer) from authenticated;
+revoke execute on function public.lastfm_set(text, text, jsonb) from authenticated;
+grant execute on function public.lastfm_due(integer), public.lastfm_set(text, text, jsonb) to service_role;

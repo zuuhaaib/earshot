@@ -12,7 +12,7 @@ import type { EarshotApi } from '@/data';
 import { music } from '@/music';
 import { decide } from '@/spotify/match';
 import { spotifyNow } from '@/spotify/sync';
-import { connect, connectedAs, disconnect, LastfmError, nowPlaying } from './client';
+import { connect, connectedAs, disconnect, LastfmError, nowPlaying, tellServer } from './client';
 import { toLastfmTrack } from './match';
 
 /** Last.fm asks apps to be gentle, and its "now playing" only moves about this often anyway. */
@@ -129,6 +129,7 @@ export function useLastfmSync(api: EarshotApi, userId: string | null) {
     connectedAs(userId).then((name) => {
       if (!alive) return;
       set({ status: name ? 'on' : 'off', name });
+      if (name) tellServer(name); // links made before the server followed Last.fm reach it too
       // give the Spotify link a moment to say whether it's working before stepping in
       if (name) setTimeout(() => alive && checkLastfm(api, userId), 4000);
     });

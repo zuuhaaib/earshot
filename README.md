@@ -70,6 +70,7 @@ Never put a Supabase secret key, the database password, the Spotify client secre
 5. Add `earshot://**` to the allowed redirect URLs.
 6. For Last.fm, save your key as an Edge Function secret called `LASTFM_API_KEY` and deploy [supabase/functions/lastfm](supabase/functions/lastfm/index.ts). The key stays on the server and never reaches a phone.
 7. For Sign in with Apple, make a Sign in with Apple key in your Apple developer account, save `APPLE_TEAM_ID`, `APPLE_KEY_ID` and `APPLE_PRIVATE_KEY` (the whole `.p8` file) as Edge Function secrets, and deploy [supabase/functions/apple](supabase/functions/apple/index.ts). Apple requires it: deleting an account made with Apple revokes earshot's access with Apple too.
+8. To keep people's Last.fm song in step while their app is closed, deploy [supabase/functions/lastfm-sync](supabase/functions/lastfm-sync/index.ts) with "Verify JWT" off, save a `CRON_SECRET` Edge Function secret, and add a Supabase Cron job that calls it every minute with the header `x-earshot-cron: <CRON_SECRET>`. The steps are at the top of the file.
 
 Whenever `schema.sql` changes, run it again. It upgrades in place.
 

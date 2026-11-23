@@ -1,6 +1,6 @@
 {
   "title": "Privacy",
-  "updated": "13 November 2026",
+  "updated": "22 November 2026",
   "intro": "This is what earshot knows about you, who else can see it, and how to get rid of it. It is written to be read, so it is short.",
   "sections": [
     {
@@ -48,7 +48,7 @@
         "Supabase stores earshot’s database and handles sign-in. Everything listed under “What earshot keeps” lives there.",
         "Apple’s iTunes Search is used to look up songs and play 30-second previews. Apple receives the words you search for, and not who you are.",
         "Spotify, only if you link it: earshot asks Spotify what you are playing right now and nothing else. The link is stored on your phone, not on earshot’s server, and unlinking deletes it.",
-        "Last.fm, only if you link it: earshot looks up the public “now playing” line for the username you give it. Your Last.fm username is stored on your phone and is sent to Last.fm, by way of earshot’s server, each time it checks.",
+        "Last.fm, only if you link it: earshot looks up the public “now playing” line for the username you give it, and puts that song on for you. Your Last.fm username is stored on your phone and on earshot’s server. While you are sharing, the server checks about once a minute, even when the app is closed, so your song keeps up. Unlinking Last.fm, turning sharing off or deleting your account stops it, and unlinking removes the username from the server.",
         "Google and Apple, only if you sign in with them: they confirm who you are. They learn that you use earshot; they are not sent what you do in it."
       ]
     },

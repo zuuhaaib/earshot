@@ -6,7 +6,7 @@
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { FunctionsHttpError } from '@supabase/supabase-js';
-import { backendClient } from '@/backend/accounts';
+import { backendClient, callServer } from '@/backend/accounts';
 import { cloudConfigured } from '@/backend/config';
 import { LASTFM_API, LASTFM_API_KEY, LASTFM_FUNCTION } from './config';
 import { cleanUsername, looksLikeUsername, readProblem, readRecent, readUser, type LastfmPlaying, type LastfmProblem } from './match';
@@ -37,6 +37,15 @@ async function save(userId: string, username: string | null) {
   }
   if (username) await SecureStore.setItemAsync(key, username);
   else await SecureStore.deleteItemAsync(key);
+  await tellServer(username);
+}
+
+/**
+ * Tell earshot's server which Last.fm username to follow while the app is closed (null: stop).
+ * Quietly does nothing without a backend or a server login (a phone-only account).
+ */
+export async function tellServer(username: string | null): Promise<void> {
+  if (cloudConfigured()) await callServer('set_lastfm', { p_user: username }).catch(() => {});
 }
 
 /** Ask through earshot's server, which holds the key. Throws 'not-deployed' if the function isn't there yet. */

@@ -12,7 +12,7 @@ export const START = Date.UTC(2026, 10, 12, 17, 0, 0);
 export const MIN = 60_000;
 
 const SUPABASE_STANDINS = `
-  create role anon; create role authenticated;
+  create role anon; create role authenticated; create role service_role;
   create schema auth;
   create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb);
   create function auth.uid() returns uuid language sql stable as $$
