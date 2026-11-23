@@ -76,7 +76,7 @@ describe('daily limits', () => {
 });
 
 describe('a burst of messages buzzes the other phone once', () => {
-  test('one notification per minute of messages from the same person in the same chat', async () => {
+  test('rapid-fire messages buzz once; a normal back-and-forth buzzes every time', async () => {
     const api = await freshDb({ seed: false });
     await api.db.exec(PG_NET);
     const { ben, chat } = await talking(api);
@@ -86,14 +86,17 @@ describe('a burst of messages buzzes the other phone once', () => {
     const pushes = async () => (await api.db.query("select count(*)::int as n from net.sent where body::text like '%Sent you a message%'")).rows[0].n;
 
     await api.as((await api.db.query("select id from app.profiles where handle = 'anna'")).rows[0].id);
-    for (let i = 0; i < 4; i++) {
-      await api.rpc('send_message', { p_chat: chat, p_body: `hello ${i}` });
-      await api.clock.advance(10_000);
+    for (let i = 0; i < 6; i++) {
+      await api.rpc('send_message', { p_chat: chat, p_body: `spam ${i}` });
+      await api.clock.advance(2_000);
     }
-    assert.equal(await pushes(), 1, 'four messages in forty seconds: one buzz');
-    await api.clock.advance(2 * MIN);
-    await api.rpc('send_message', { p_chat: chat, p_body: 'later' });
-    assert.equal(await pushes(), 2, 'a message after a pause buzzes again');
+    assert.equal(await pushes(), 1, 'six messages two seconds apart: one buzz');
+    await api.clock.advance(15_000);
+    for (let i = 0; i < 3; i++) {
+      await api.rpc('send_message', { p_chat: chat, p_body: `hello ${i}` });
+      await api.clock.advance(20_000);
+    }
+    assert.equal(await pushes(), 4, 'three messages twenty seconds apart: three more buzzes');
   });
 });
 

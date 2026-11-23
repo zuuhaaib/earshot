@@ -363,7 +363,7 @@ $$;
 -- shortcut: titles and artists are still taken on trust from whoever sends a song first; checking them against Apple's catalogue would need the server to look each one up
 create or replace function app.trusted_artwork(u text) returns boolean
 language sql immutable set search_path = '' as $$
-  select u ~ '^https://[a-z0-9.-]+\.mzstatic\.com/' or u ~ '^https://lastfm\.freetls\.fastly\.net/' or u ~ '^https://i\.scdn\.co/'
+  select u ~ '^https://[a-z0-9.-]+\.mzstatic\.com/' or u ~ '^https://lastfm(-img)?\.freetls\.fastly\.net/' or u ~ '^https://i\.scdn\.co/'
 $$;
 create or replace function app.trusted_preview(u text) returns boolean
 language sql immutable set search_path = '' as $$
@@ -1609,9 +1609,9 @@ begin
   select * into q from app.requests where id = new.request_id;
   other := case when new.from_id = q.from_id then q.to_id else q.from_id end;
   if app.i_blocked(other, new.from_id) then return null; end if; -- blocked people's messages are never shown, so never announced
-  -- a burst of messages buzzes the other phone once, not once per message
+  -- every message buzzes, except rapid-fire ones: anything within 10 seconds of their last is part of the same burst
   if exists (select 1 from app.messages m where m.request_id = new.request_id and m.from_id = new.from_id and m.id <> new.id
-             and m.created_at > new.created_at - 60000 and m.created_at <= new.created_at) then
+             and m.created_at > new.created_at - 10000 and m.created_at <= new.created_at) then
     return null;
   end if;
   select name into sender from app.profiles where id = new.from_id;

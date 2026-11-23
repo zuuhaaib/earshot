@@ -65,7 +65,8 @@ export default function RootLayout() {
               <Stack.Screen name="place" options={{ presentation: 'modal' }} />
               <Stack.Screen name="set-song" options={{ presentation: 'modal' }} />
               <Stack.Screen name="send/[id]" options={{ presentation: 'modal' }} />
-              <Stack.Screen name="chat/[id]" options={{ animation: 'slide_from_right' }} />
+              {/* one screen per chat: a double tap or a notification tap reuses it instead of stacking a copy */}
+              <Stack.Screen name="chat/[id]" options={{ animation: 'slide_from_right' }} dangerouslySingular={(_, params) => String(params.id)} />
               <Stack.Screen name="room/edit" options={{ animation: 'slide_from_bottom' }} />
               <Stack.Screen name="room/section/[index]" options={{ animation: 'slide_from_right' }} />
               <Stack.Screen name="pick-song" options={{ presentation: 'modal' }} />

@@ -29,7 +29,7 @@ describe('song links come only from the services earshot uses', () => {
 
     // the real thing still goes through, and so do Last.fm and Spotify covers with no preview
     await api.rpc('set_now_playing', { p_track: real, p_note: null });
-    for (const cover of ['https://lastfm.freetls.fastly.net/i/u/300x300/abc.jpg', 'https://i.scdn.co/image/abc']) {
+    for (const cover of ['https://lastfm.freetls.fastly.net/i/u/300x300/abc.jpg', 'https://lastfm-img.freetls.fastly.net/i/u/300x300/abcd.jpg', 'https://i.scdn.co/image/abc']) {
       await api.rpc('set_now_playing', { p_track: { ...track(`other-${cover.length}`), artworkUrl: cover, previewUrl: null }, p_note: null });
     }
     assert.equal(someone.length > 0, true);
