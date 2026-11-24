@@ -21,6 +21,73 @@
 <h1>Find out what everyone around you has on.</h1>
 
 <p>earshot is a social music app. Open it anywhere and see what the people nearby are playing, then say hello by sending them a song. It shows that someone is nearby, never where they are.</p>
+<style>
+  .card { position: relative; background: #F9F3E5; border: 2px solid #1F2A6B; box-shadow: 6px 6px 0 #1F2A6B; padding: 26px 22px 20px; margin: 34px 4px 10px; transform: rotate(-0.6deg); }
+  .tape { position: absolute; top: -13px; left: 38px; width: 110px; height: 26px; background: rgba(255, 210, 63, 0.75); transform: rotate(-4deg); }
+  .card h2 { margin-top: 0; }
+  .card label, .card legend { display: block; font: 700 13px/1.3 'Courier New', monospace; letter-spacing: 0.06em; text-transform: uppercase; margin: 16px 0 6px; }
+  .card fieldset { border: 0; padding: 0; margin: 0; }
+  .card fieldset label { display: inline-flex; align-items: center; gap: 8px; margin: 4px 22px 0 0; font: 17px Georgia, serif; text-transform: none; letter-spacing: 0; }
+  .card input[type=email], .card input[type=text] { box-sizing: border-box; width: 100%; font: 17px Georgia, serif; color: #1F2A6B; background: #FFFDF7; border: 2px solid #1F2A6B; padding: 10px 12px; }
+  .card input[type=radio] { accent-color: #F0502F; width: 18px; height: 18px; margin: 0; }
+  .card button { margin-top: 20px; font: 700 17px/1 'Courier New', monospace; letter-spacing: 0.04em; color: #FFFDF7; background: #F0502F; border: 2px solid #1F2A6B; box-shadow: 4px 4px 0 #1F2A6B; padding: 14px 20px; cursor: pointer; }
+  .card button:disabled { opacity: 0.6; cursor: wait; }
+  .card :focus-visible { outline: 3px solid #FFD23F; outline-offset: 2px; }
+  .hp { position: absolute; left: -9999px; }
+</style>
+<section class="card" aria-labelledby="wl-title">
+<span class="tape" aria-hidden="true"></span>
+<h2 id="wl-title">Join the first pressing</h2>
+<p>earshot is being tested now. Leave your email and you’ll get in before everyone else, as one of the first people on it.</p>
+<form id="wl" novalidate>
+<label for="wl-email">Email</label>
+<input id="wl-email" type="email" name="email" required maxlength="254" autocomplete="email" inputmode="email">
+<fieldset><legend>Your phone</legend>
+<label><input type="radio" name="phone" value="iphone" required> iPhone</label>
+<label><input type="radio" name="phone" value="android"> Android</label>
+</fieldset>
+<label for="wl-area">Your neighbourhood (optional)</label>
+<input id="wl-area" type="text" name="area" maxlength="60" placeholder="Little Portugal, say">
+<input class="hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+<button type="submit">Join the list</button>
+<p id="wl-msg" class="meta" role="status" aria-live="polite"></p>
+</form>
+</section>
+<script>
+(() => {
+  const URL = "https://acbiqcxtajhcigczhwri.supabase.co", KEY = "sb_publishable_CRAZXMiPqPDsY-Ewhoc9hw_vUiuwmmg";
+  const SAY = {
+    'bad-email': 'That email doesn’t look right. Check it and try again.',
+    'bad-phone': 'Pick iPhone or Android.',
+    'bad-area': 'Keep the neighbourhood short.',
+    'busy': 'Lots of people at once. Try again in a minute.',
+    'waitlist-full': 'The list is full for now. Check back soon.',
+  };
+  const form = document.getElementById('wl'), msg = document.getElementById('wl-msg'), button = form.querySelector('button');
+  const done = () => { form.innerHTML = '<p><strong>You’re on the list.</strong> We’ll email you when it’s your turn.</p>'; };
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = form.email.value.trim(), phone = form.phone.value;
+    if (form.website.value) return done(); // only a bot fills the hidden field
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { msg.textContent = SAY['bad-email']; form.email.focus(); return; }
+    if (!phone) { msg.textContent = SAY['bad-phone']; return; }
+    button.disabled = true; msg.textContent = 'Adding you…';
+    try {
+      const res = await fetch(URL + '/rest/v1/rpc/join_waitlist', {
+        method: 'POST',
+        headers: { apikey: KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_email: email, p_phone: phone, p_area: form.area.value.trim() || null }),
+      });
+      if (res.ok) return done();
+      const why = (await res.json().catch(() => ({}))).message;
+      msg.textContent = SAY[why] || 'Something went wrong. Try again in a minute.';
+    } catch {
+      msg.textContent = 'Couldn’t reach earshot. Check your connection and try again.';
+    }
+    button.disabled = false;
+  });
+})();
+</script>
 <h2>Coming soon</h2>
 <p>To iPhone and Android. Questions in the meantime go to <a href="mailto:earshot.support@gmail.com">earshot.support@gmail.com</a>.</p>
 <p class="meta" style="margin-top:40px"><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/support">Help and contact</a> · <a href="/delete-account">Delete your account</a></p>

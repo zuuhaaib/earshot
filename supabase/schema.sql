@@ -280,10 +280,19 @@ create table if not exists app.reports (
   handled boolean not null default false
 );
 
+-- The waitlist on earshot.lol: people who want in before launch, the first pressing.
+-- Kept only to invite them; deleted on request.
+create table if not exists app.waitlist (
+  email text primary key,          -- lowercased
+  phone text not null check (phone in ('iphone', 'android')),
+  area text,                       -- their neighbourhood, if they said
+  joined_at bigint not null
+);
+
 do $$
 declare t text;
 begin
-  foreach t in array array['profiles','tracks','plays','saves','requests','messages','chat_reads','rooms','posts','threads','replies','presence','tastes','openers','sim_state','blocks','reports','chat_hides','push_tokens','song_matches','area_moves']
+  foreach t in array array['profiles','tracks','plays','saves','requests','messages','chat_reads','rooms','posts','threads','replies','presence','tastes','openers','sim_state','blocks','reports','chat_hides','push_tokens','song_matches','area_moves','waitlist']
   loop
     execute format('alter table app.%I enable row level security', t);
   end loop;
@@ -513,6 +522,22 @@ create or replace function public.handle_available(wanted text) returns boolean
 language sql stable security definer set search_path = '' as $$
   select not exists (select 1 from app.profiles where lower(handle) = lower(trim(wanted)));
 $$;
+
+-- Join the waitlist from earshot.lol, without an account. Joining twice is fine and changes nothing, and
+-- it never says whether an email was already on the list.
+create or replace function public.join_waitlist(p_email text, p_phone text, p_area text default null) returns void
+language plpgsql volatile security definer set search_path = '' as $$
+declare e text := lower(trim(p_email)); n bigint := app.now_ms();
+begin
+  if e is null or length(e) > 254 or e !~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' then raise exception 'bad-email'; end if;
+  if p_phone is null or p_phone not in ('iphone', 'android') then raise exception 'bad-phone'; end if;
+  if length(coalesce(p_area, '')) > 60 then raise exception 'bad-area'; end if;
+  -- a bot filling the list: cap the pace and the size, both far above what real people do
+  if (select count(*) from app.waitlist where joined_at > n - 60000) >= 120 then raise exception 'busy'; end if;
+  if (select count(*) from app.waitlist) >= 50000 then raise exception 'waitlist-full'; end if;
+  insert into app.waitlist (email, phone, area, joined_at) values (e, p_phone, nullif(trim(p_area), ''), n)
+    on conflict (email) do nothing;
+end $$;
 
 create or replace function public.get_session() returns jsonb
 language plpgsql stable security definer set search_path = '' as $$
@@ -1833,9 +1858,10 @@ end $$;
 -- ---------------------------------------------------------------------------
 -- who may call what
 -- ---------------------------------------------------------------------------
--- Only signed-in people may call the app's functions. The two exceptions are
+-- Only signed-in people may call the app's functions. The exceptions are
 -- handle_available, which the sign-up screen needs before anyone has logged in,
--- and get_session, which simply answers "nobody" to someone who isn't.
+-- get_session, which simply answers "nobody" to someone who isn't, and
+-- join_waitlist, which earshot.lol calls for people who don't have the app yet.
 
 revoke execute on all functions in schema public from public, anon;
 revoke execute on all functions in schema app from public, anon, authenticated;
@@ -1843,6 +1869,7 @@ grant execute on all functions in schema public to authenticated;
 revoke execute on function public.handle_new_user() from authenticated;
 grant execute on function public.handle_available(text) to anon, authenticated;
 grant execute on function public.get_session() to anon, authenticated;
+grant execute on function public.join_waitlist(text, text, text) to anon, authenticated;
 revoke execute on function public.lastfm_due(integer) from authenticated;
 revoke execute on function public.lastfm_set(text, text, jsonb) from authenticated;
 grant execute on function public.lastfm_due(integer), public.lastfm_set(text, text, jsonb) to service_role;

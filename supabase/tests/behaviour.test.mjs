@@ -566,9 +566,9 @@ describe('what the outside world can reach', () => {
     assert.equal(await q("select has_function_privilege('anon', 'public.send_song(text, jsonb, text)', 'execute') as ok"), false);
     assert.equal(await q("select has_function_privilege('anon', 'public.handle_available(text)', 'execute') as ok"), true);
     assert.equal(await q("select has_function_privilege('anon', 'public.get_session()', 'execute') as ok"), true);
-    // and those are the only two a logged-out caller can run
+    // and those, plus joining the waitlist from earshot.lol, are all a logged-out caller can run
     const callable = (await api.db.query("select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and has_function_privilege('anon', p.oid, 'execute') order by 1")).rows.map((r) => r.proname);
-    assert.deepEqual(callable, ["get_session", "handle_available"]);
+    assert.deepEqual(callable, ["get_session", "handle_available", "join_waitlist"]);
     assert.equal(await q("select has_function_privilege('authenticated', 'public.get_nearby()', 'execute') as ok"), true);
     assert.equal(await q("select has_function_privilege('authenticated', 'public.handle_new_user()', 'execute') as ok"), false);
     // every table has row-level security on and no policy, so direct access shows nothing

@@ -1,6 +1,6 @@
 {
   "title": "Privacy",
-  "updated": "23 November 2026",
+  "updated": "24 November 2026",
   "intro": "This is what earshot knows about you, who else can see it, and how to get rid of it. It is written to be read, so it is short.",
   "sections": [
     {
@@ -22,7 +22,8 @@
         "What you send and write: songs you send people, chat messages, your room and everything on it, guestbook signatures, city posts, and threads and replies in artist rooms.",
         "Your crate: the songs you have saved.",
         "If you turn on “songs that found each other”: a note of which songs it has told you about and when, so it never repeats itself or sends more than three a day. A match names the other person to you and you to them, so it only ever matches two people who have both switched it on, and only songs you both played while sharing.",
-        "Safety records: the list of people you have blocked, and any reports you make."
+        "Safety records: the list of people you have blocked, and any reports you make.",
+        "If you join the waitlist on earshot.lol: your email address, whether you have an iPhone or an Android phone, and the neighbourhood you gave, if any. It is used only to invite you to try earshot, and it is not linked to an account."
       ]
     },
     {
@@ -59,7 +60,8 @@
         "Delete a chat: open it, tap “more”, then “delete chat”. It is removed from your side. Once both people have deleted it, the messages are erased from the server.",
         "Delete your account: on the You tab, tap “delete account”. This immediately and permanently removes your profile, room, crate, listening history, songs sent and received, chats, city posts, threads you started (with their replies), your replies, your guestbook signatures, your blocked list and your login.",
         "What survives account deletion: reports you made are kept with your name removed from them, and reports made about you are kept, so that safety problems can still be acted on.",
-        "If you cannot get into your account, write to the support address and it will be deleted for you once you have shown the email address is yours."
+        "If you cannot get into your account, write to the support address and it will be deleted for you once you have shown the email address is yours.",
+        "To come off the waitlist, write to the support address from the email you joined with, and it will be deleted."
       ]
     },
     {
