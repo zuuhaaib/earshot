@@ -3,7 +3,7 @@
 //   npm run test:server
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { freshDb, track } from './harness.mjs';
+import { freshDb, MIN, track } from './harness.mjs';
 
 // pg_net, stood in for: outgoing requests are written down instead of sent.
 const PG_NET = `
@@ -42,10 +42,12 @@ describe('push notifications', () => {
     await api.rpc('answer_song', { p_request: sent.id, p_accept: true });
     assert.deepEqual(await pushes(api), [[TOKEN_A, 'Ben Ito said yes', 'To Not. Your chat is open.', `/chat/${sent.id}`]]);
 
-    await api.rpc('send_message', { p_chat: sent.id, p_body: 'my private words' });
-    const msg = await pushes(api);
-    assert.deepEqual(msg, [[TOKEN_A, 'Ben Ito', 'Sent you a message.', `/chat/${sent.id}`]]);
-    assert.ok(!JSON.stringify(msg).includes('private words'), 'a message is never quoted on the lock screen');
+    await api.rpc('send_message', { p_chat: sent.id, p_body: 'see you at the show' });
+    assert.deepEqual(await pushes(api), [[TOKEN_A, 'Ben Ito', 'see you at the show', `/chat/${sent.id}`]]);
+
+    await api.clock.advance(MIN);
+    await api.rpc('send_message', { p_chat: sent.id, p_body: 'x'.repeat(300) });
+    assert.equal((await pushes(api))[0][2], `${'x'.repeat(179)}…`, 'a long message is cut short');
   });
 
   test('a no is never announced', async () => {

@@ -83,7 +83,7 @@ describe('a burst of messages buzzes the other phone once', () => {
     await api.as(ben);
     await api.rpc('register_push_token', { p_token: 'ExponentPushToken[ben]' });
     await api.db.exec('delete from net.sent');
-    const pushes = async () => (await api.db.query("select count(*)::int as n from net.sent where body::text like '%Sent you a message%'")).rows[0].n;
+    const pushes = async () => (await api.db.query("select count(*)::int as n from net.sent where body::text like '%/chat/%'")).rows[0].n;
 
     await api.as((await api.db.query("select id from app.profiles where handle = 'anna'")).rows[0].id);
     for (let i = 0; i < 6; i++) {

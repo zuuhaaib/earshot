@@ -1635,7 +1635,12 @@ begin
     return null;
   end if;
   select name into sender from app.profiles where id = new.from_id;
-  perform app.push(other, coalesce(sender, 'Someone'), case when new.track_id is null then 'Sent you a message.' else 'Sent you a song.' end, '/chat/' || new.request_id);
+  -- the message itself, cut short; iPhone's own "Show Previews" setting decides whether the lock screen shows it
+  perform app.push(other, coalesce(sender, 'Someone'),
+    case when new.track_id is not null then 'Sent you a song.'
+         when length(new.body) > 180 then left(new.body, 179) || '…'
+         else new.body end,
+    '/chat/' || new.request_id);
   return null;
 end $$;
 
